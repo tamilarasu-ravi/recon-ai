@@ -1,0 +1,37 @@
+[
+  {
+    "external_invoice_id": "inv-aws-2025-01",
+    "vendor_raw": "aws",
+    "amount": "1200.00",
+    "currency": "USD",
+    "invoice_date": "2025-01-10T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-slack-2025-02",
+    "vendor_raw": "slack",
+    "amount": "450.00",
+    "currency": "USD",
+    "invoice_date": "2025-02-01T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-starbucks-2025-02",
+    "vendor_raw": "starbucks",
+    "amount": "85.00",
+    "currency": "USD",
+    "invoice_date": "2025-02-15T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-consulting-2025-03",
+    "vendor_raw": "Zephyr Labs LLC",
+    "amount": "2500.00",
+    "currency": "USD",
+    "invoice_date": "2025-03-01T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-aws-2025-03",
+    "vendor_raw": "aws",
+    "amount": "890.00",
+    "currency": "USD",
+    "invoice_date": "2025-03-12T00:00:00.000Z"
+  }
+]

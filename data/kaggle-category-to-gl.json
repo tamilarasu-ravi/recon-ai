@@ -1,0 +1,31 @@
+{
+  "tenant-a": {
+    "food": "6300",
+    "entertainment": "6300",
+    "travel": "6300",
+    "shopping": "6400",
+    "utilities": "6100",
+    "healthcare": "6200",
+    "education": "6200",
+    "investment": null,
+    "emi": null
+  },
+  "tenant-b": {
+    "food": "5400",
+    "entertainment": "5300",
+    "travel": "5200",
+    "shopping": "5400",
+    "utilities": "5400",
+    "healthcare": "5400",
+    "education": "5400",
+    "investment": null,
+    "emi": null
+  },
+  "personal-expense": {
+    "food": "6300",
+    "transport": "6300",
+    "shopping": "6400",
+    "entertainment": "6300",
+    "technology": "6100"
+  }
+}

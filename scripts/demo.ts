@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { config as loadDotenv } from "dotenv";
 
 import { createDb } from "@/lib/db/client";
@@ -11,6 +12,17 @@ loadDotenv({ path: ".env.local" });
 loadDotenv({ path: ".env" });
 
 const DEMO_TIMESTAMP = "2026-06-01T12:00:00.000Z";
+
+/**
+ * Builds a unique external id per demo run so repeat invocations do not hit idempotency duplicates.
+ *
+ * @param runId - Unique run suffix for this demo execution.
+ * @param slug - Stable step slug (e.g. slack-55).
+ * @returns External transaction or invoice id.
+ */
+function demoExternalId(runId: string, slug: string): string {
+  return `demo-${runId}-${slug}`;
+}
 
 /**
  * Prints a labeled demo step to stdout.
@@ -32,26 +44,31 @@ function logStep(label: string, detail: unknown): void {
 async function main(): Promise<void> {
   const db = createDb();
   const tenantId = await getTenantIdBySlug(db, "tenant-a");
+  const demoRunId = randomUUID().slice(0, 8);
 
   console.log("ReconAI E2E demo (tenant-a)");
   console.log(`tenant_id: ${tenantId}`);
+  console.log(`demo_run_id: ${demoRunId} (fresh external ids — safe to re-run)`);
 
   const slackResult = await runTaggingPipeline(db, {
     tenantId,
-    externalTransactionId: "demo-slack-55",
+    externalTransactionId: demoExternalId(demoRunId, "slack-55"),
     transactionTimestamp: DEMO_TIMESTAMP,
     amount: "55.00",
     currency: "USD",
     vendorRaw: "Slack",
   });
   logStep("1. Tagging — Slack $55 (under receipt threshold)", slackResult);
+  if (slackResult.status === "duplicate") {
+    throw new Error("Unexpected duplicate on step 1 — demo_run_id should be unique");
+  }
   if (slackResult.decision !== "AUTO_TAG") {
     throw new Error(`Expected AUTO_TAG for Slack $55, got ${slackResult.decision}`);
   }
 
   const awsReceiptResult = await runTaggingPipeline(db, {
     tenantId,
-    externalTransactionId: "demo-aws-99",
+    externalTransactionId: demoExternalId(demoRunId, "aws-99"),
     transactionTimestamp: DEMO_TIMESTAMP,
     amount: "99.00",
     currency: "USD",
@@ -59,6 +76,9 @@ async function main(): Promise<void> {
     memo: "ec2",
   });
   logStep("2. Policy + tagging — AWS $99 (receipt required)", awsReceiptResult);
+  if (awsReceiptResult.status === "duplicate") {
+    throw new Error("Unexpected duplicate on step 2 — demo_run_id should be unique");
+  }
   if (awsReceiptResult.policyOutcome !== "FLAG_RECEIPT") {
     throw new Error(`Expected FLAG_RECEIPT, got ${awsReceiptResult.policyOutcome}`);
   }
@@ -85,7 +105,7 @@ async function main(): Promise<void> {
 
   const zephyrFirst = await runTaggingPipeline(db, {
     tenantId,
-    externalTransactionId: "demo-zephyr-1",
+    externalTransactionId: demoExternalId(demoRunId, "zephyr-1"),
     transactionTimestamp: DEMO_TIMESTAMP,
     amount: "1200.00",
     currency: "USD",
@@ -103,7 +123,7 @@ async function main(): Promise<void> {
 
   const zephyrReplay = await runTaggingPipeline(db, {
     tenantId,
-    externalTransactionId: "demo-zephyr-2",
+    externalTransactionId: demoExternalId(demoRunId, "zephyr-2"),
     transactionTimestamp: DEMO_TIMESTAMP,
     amount: "50.00",
     currency: "USD",
@@ -115,26 +135,35 @@ async function main(): Promise<void> {
     throw new Error(`Expected AUTO_TAG after override learning, got ${zephyrReplay.decision}`);
   }
 
+  // Per-run invoice date avoids cross-run duplicate hash (vendor + amount + date).
+  const apInvoiceDay = (parseInt(demoRunId.replace(/-/g, "").slice(0, 4), 16) % 27) + 1;
+  const apInvoiceDate = `2026-06-${String(apInvoiceDay).padStart(2, "0")}T00:00:00.000Z`;
+
   const apFirst = await runApPipeline(db, {
     tenantId,
-    externalInvoiceId: "demo-inv-unique",
+    externalInvoiceId: demoExternalId(demoRunId, "inv-unique"),
     vendorRaw: "aws",
     amount: "500.00",
     currency: "USD",
-    invoiceDate: "2026-05-15T00:00:00.000Z",
+    invoiceDate: apInvoiceDate,
   });
   logStep("7. AP recommend-only", apFirst);
+  if (apFirst.status === "duplicate") {
+    throw new Error(
+      `Unexpected AP duplicate on step 7 (collides with prior demo invoice for ${apInvoiceDate})`,
+    );
+  }
   if (apFirst.recommendationStatus !== "recommend") {
     throw new Error("Expected AP recommendation");
   }
 
   const apDup = await runApPipeline(db, {
     tenantId,
-    externalInvoiceId: "demo-inv-dup-attempt",
+    externalInvoiceId: demoExternalId(demoRunId, "inv-dup-attempt"),
     vendorRaw: "AWS",
     amount: "500.00",
     currency: "USD",
-    invoiceDate: "2026-05-15T00:00:00.000Z",
+    invoiceDate: apInvoiceDate,
   });
   logStep("8. AP duplicate refused", apDup);
   if (apDup.status !== "duplicate") {

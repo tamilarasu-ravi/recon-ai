@@ -8,6 +8,8 @@ dist/
 
 # SME feedback written by capstone-sme-agent (re-run review to refresh)
 docs/*
+!docs/eval-results.md
+!docs/demo-script.md
 .cursor/*
 
 pnpm-lock.yaml
@@ -16,3 +18,7 @@ pnpm-lock.yaml
 tsconfig.tsbuildinfo
 
 data/*
+!data/README.md
+!data/kaggle-category-to-gl.json
+!data/mock_invoices/
+!data/mock_invoices/**

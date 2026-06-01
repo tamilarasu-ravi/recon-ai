@@ -1,0 +1,37 @@
+[
+  {
+    "external_invoice_id": "inv-fedex-2025-01",
+    "vendor_raw": "fedex",
+    "amount": "320.00",
+    "currency": "USD",
+    "invoice_date": "2025-01-08T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-google-ads-2025-02",
+    "vendor_raw": "google ads",
+    "amount": "1500.00",
+    "currency": "USD",
+    "invoice_date": "2025-02-05T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-staples-2025-02",
+    "vendor_raw": "staples",
+    "amount": "95.00",
+    "currency": "USD",
+    "invoice_date": "2025-02-20T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-fedex-2025-03",
+    "vendor_raw": "FedEx",
+    "amount": "180.00",
+    "currency": "USD",
+    "invoice_date": "2025-03-10T00:00:00.000Z"
+  },
+  {
+    "external_invoice_id": "inv-staples-2025-03",
+    "vendor_raw": "staples",
+    "amount": "42.00",
+    "currency": "USD",
+    "invoice_date": "2025-03-18T00:00:00.000Z"
+  }
+]
