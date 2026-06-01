@@ -869,6 +869,31 @@ pnpm dev                        # http://localhost:3000
 
 ---
 
+## Showcase (Jun 14)
+
+**Automated gate** (no DB required):
+
+```bash
+pnpm verify
+```
+
+**Full path** (Postgres + 9-step demo):
+
+```bash
+docker compose up -d
+pnpm db:seed
+pnpm verify:full
+pnpm dev                        # /review-queue + transaction detail
+```
+
+**3-minute demo:** `pnpm demo` — tagging, receipt gate, override learning, AP duplicate, REFUSE.
+
+**Eval proof:** `pnpm eval:tagging` → 30/30 cases in `eval/results/tagging-latest.json`.
+
+Before submission: fill **Author** in the table at the top; tag `v0.1.0-demo` on your freeze commit.
+
+---
+
 ## Getting started (implementation checklist)
 
 - [x] Scaffold Next.js + Postgres + pgvector (`docker compose up`)

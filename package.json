@@ -14,6 +14,8 @@
     "db:import-data": "tsx scripts/import-external-data.ts",
     "eval:tagging": "tsx scripts/run-tagging-eval.ts",
     "demo": "tsx scripts/demo.ts",
+    "verify": "tsx scripts/verify-showcase.ts",
+    "verify:full": "tsx scripts/verify-showcase.ts && pnpm demo",
     "mcp": "tsx src/mcp/server.ts",
     "test": "node --import tsx --test tests/unit/**/*.test.ts"
   },

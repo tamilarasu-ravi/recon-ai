@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { config as loadDotenv } from "dotenv";
 
-import { createDb } from "@/lib/db/client";
+import { createDb, closeDb } from "@/lib/db/client";
 import { applyTransactionOverride } from "@/lib/orchestrator/apply-override";
 import { getTenantIdBySlug, runApPipeline } from "@/lib/orchestrator/run-ap-pipeline";
 import { reprocessTransactionTagging } from "@/lib/orchestrator/reprocess-tagging";
@@ -22,6 +22,20 @@ const DEMO_TIMESTAMP = "2026-06-01T12:00:00.000Z";
  */
 function demoExternalId(runId: string, slug: string): string {
   return `demo-${runId}-${slug}`;
+}
+
+/**
+ * Derives a stable but high-entropy invoice date per demo run (AP duplicate hash uses date).
+ *
+ * @param runId - Unique demo run suffix.
+ * @returns ISO timestamp at UTC midnight.
+ */
+function demoApInvoiceDate(runId: string): string {
+  const offset =
+    parseInt(createHash("sha256").update(`ap-invoice-${runId}`).digest("hex").slice(0, 8), 16) %
+    365;
+  const date = new Date(Date.UTC(2026, 0, 1 + offset));
+  return date.toISOString();
 }
 
 /**
@@ -135,9 +149,7 @@ async function main(): Promise<void> {
     throw new Error(`Expected AUTO_TAG after override learning, got ${zephyrReplay.decision}`);
   }
 
-  // Per-run invoice date avoids cross-run duplicate hash (vendor + amount + date).
-  const apInvoiceDay = (parseInt(demoRunId.replace(/-/g, "").slice(0, 4), 16) % 27) + 1;
-  const apInvoiceDate = `2026-06-${String(apInvoiceDay).padStart(2, "0")}T00:00:00.000Z`;
+  const apInvoiceDate = demoApInvoiceDate(demoRunId);
 
   const apFirst = await runApPipeline(db, {
     tenantId,
@@ -191,7 +203,13 @@ async function main(): Promise<void> {
   console.log("\n✅ Demo complete — all steps passed (incl. REFUSE).");
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+main()
+  .then(async () => {
+    await closeDb();
+    process.exit(0);
+  })
+  .catch(async (error: unknown) => {
+    console.error(error);
+    await closeDb();
+    process.exit(1);
+  });

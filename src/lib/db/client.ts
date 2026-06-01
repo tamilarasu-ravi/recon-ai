@@ -3,6 +3,11 @@ import postgres from "postgres";
 
 import * as schema from "./schema";
 
+type PostgresClient = ReturnType<typeof postgres>;
+
+/** Script-scoped postgres clients — closed by closeDb() so CLI exits cleanly. */
+const managedClients: PostgresClient[] = [];
+
 /**
  * Returns a Drizzle database client bound to the application schema.
  *
@@ -22,6 +27,7 @@ export function createDb(connectionString?: string) {
     // Required when using Neon/Vercel pooler (PgBouncer transaction mode).
     prepare: isServerless ? false : undefined,
   });
+  managedClients.push(client);
   return drizzle(client, { schema });
 }
 
@@ -29,6 +35,17 @@ export type DbClient = ReturnType<typeof createDb>;
 
 /** Singleton used by API routes and scripts in dev. */
 let dbSingleton: DbClient | undefined;
+
+/**
+ * Closes all postgres clients opened via createDb (allows CLI scripts to exit).
+ *
+ * @returns Promise that resolves when connections are drained.
+ */
+export async function closeDb(): Promise<void> {
+  await Promise.all(managedClients.map((client) => client.end({ timeout: 5 })));
+  managedClients.length = 0;
+  dbSingleton = undefined;
+}
 
 /**
  * Lazily initializes and returns the shared database client.
