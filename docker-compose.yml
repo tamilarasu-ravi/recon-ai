@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: recon-ai-postgres
+    restart: unless-stopped
+    # Host 5434 avoids conflict with system PostgreSQL on 5432/5433 (common on macOS)
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cfo_capstone
+    volumes:
+      - recon_ai_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cfo_capstone"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  recon_ai_pgdata:

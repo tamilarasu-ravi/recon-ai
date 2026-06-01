@@ -21,7 +21,7 @@
 
 Reviewers care more about **clear boundaries**, **evals**, and **“don’t know” behavior** than feature count.
 
-**Quick links:** [What we're building (beginners)](./docs/what-we-are-building.md) · [Production at scale (interview)](./docs/production-at-scale.md) · [Schedule to Jun 14](#timeline-demo-june-14-2026) · [Day-by-day](./docs/schedule.md) · [Planning phases](./capstone-poc-planner/SKILL.md) · [Unified capstone](#unified-capstone-three-workflows-one-platform) · [Orchestrator](#orchestrator-explicit) · [MCP](#mcp-agent-native-boundary) · [Tech stack](#tech-stack-recommended) · [Tech stack planning](./docs/tech-stack.md) · [Hero build spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Project pitch (PDF)](./PITCH-cfo-operations-platform.pdf) · [Eval plan](#eval-plan) · [Repo layout](#repository-layout)
+**Quick links:** [Implementation plansheet](./docs/plansheet.md) · [SME agent (separate repo)](../capstone-sme-agent) · [What we're building (beginners)](./docs/what-we-are-building.md) · [Production at scale (interview)](./docs/production-at-scale.md) · [Schedule to Jun 14](#timeline-demo-june-14-2026) · [Day-by-day](./docs/schedule.md) · [Planning phases](./capstone-poc-planner/SKILL.md) · [Unified capstone](#unified-capstone-three-workflows-one-platform) · [Orchestrator](#orchestrator-explicit) · [MCP](#mcp-agent-native-boundary) · [Tech stack](#tech-stack-recommended) · [Tech stack planning](./docs/tech-stack.md) · [Hero build spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Project pitch (PDF)](./PITCH-cfo-operations-platform.pdf) · [Eval plan](#eval-plan) · [Repo layout](#repository-layout)
 
 **Source brief:** _CFO Agent_ (Workflows 1–3). This repo implements all three as **one platform** with depth weighted toward Workflow 1.
 
@@ -52,7 +52,7 @@ You have **~14 calendar days** to build (May 28 → Jun 10). Plan for the **3-we
 | Idea-to-Plan output   | Capstone artifact                                                     | Status                  |
 | --------------------- | --------------------------------------------------------------------- | ----------------------- |
 | PRD / problem framing | [`README.md`](./README.md) — unified capstone + workflows             | Done                    |
-| Design doc            | [`docs/tech-stack.md`](./docs/tech-stack.md) + `docs/architecture.md` | Stack done; arch week 1 |
+| Design doc            | [`docs/tech-stack.md`](./docs/tech-stack.md) + [`docs/architecture.md`](./docs/architecture.md) + [`docs/capstone-requirements-and-evals.md`](./docs/capstone-requirements-and-evals.md) | Stack done; docs split for submission |
 | Task graph / phases   | Week-by-week plan below + optional GitHub Projects                    | This README             |
 | Audit trail           | Git commits, `events` + `audit_log`, eval results                     | During build            |
 
@@ -622,7 +622,7 @@ Implements [Workflow 3 — Accounts payable](#workflow-3--accounts-payable-agent
 
 ## Calendar plan (May 28 – Jun 14)
 
-See [`docs/schedule.md`](./docs/schedule.md) for the full day-by-day checklist.
+See [`docs/schedule.md`](./docs/schedule.md) for the full day-by-day checklist. **Executable task list:** [`docs/plansheet.md`](./docs/plansheet.md).
 
 | Phase                | Dates           | Goal                                                           |
 | -------------------- | --------------- | -------------------------------------------------------------- |
@@ -802,9 +802,11 @@ capstone-project/
 ├── docs/
 │   ├── what-we-are-building.md # Beginner guide — business problem first
 │   ├── production-at-scale.md  # Scaling, cost, ops — interview prep (design only)
+│   ├── plansheet.md            # Implementation tasks (README + hero spec)
 │   ├── schedule.md             # Day-by-day to Jun 14 (code freeze Jun 10)
 │   ├── tech-stack.md           # Stack planning (canonical detail)
-│   ├── architecture.md         # 2-page orchestrator + agents
+│   ├── architecture.md                    # System design (orchestrator, agents, deployment)
+│   ├── capstone-requirements-and-evals.md # Problem, data processing, eval criteria
 │   ├── demo-script.md          # 3-minute rehearsed path
 │   ├── eval-results.md         # Metric tables + failure notes
 │   ├── planning/
@@ -887,6 +889,7 @@ pnpm dev                        # http://localhost:3000
 | Eval plan      | [`phases/06-eval-plan.md`](./capstone-poc-planner/phases/06-eval-plan.md)                                                                         | Full eval contract         |
 | Spec           | [`phases/07-generate-spec.md`](./capstone-poc-planner/phases/07-generate-spec.md)                                                                 | Final spec generation      |
 | Hero build     | [`docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md`](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md)         | Tagging + evals + §12 ops  |
+| Plansheet      | [`docs/plansheet.md`](./docs/plansheet.md)                                                                                                       | Day-by-day build tasks     |
 | Phase status   | [`docs/planning/phase-status.md`](./docs/planning/phase-status.md)                                                                               | Planner phases 0–7 tracker |
 | Beginner guide | [`docs/what-we-are-building.md`](./docs/what-we-are-building.md)                                                                                 | Business problem first   |
 | Production scale | [`docs/production-at-scale.md`](./docs/production-at-scale.md)                                                                                 | Interview / senior AI ops |

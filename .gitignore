@@ -1,8 +1,14 @@
 .env
-.env.example
+.env.local
 node_modules/
 .next/
 dist/
 .venv-pdf/
-.cursor/
 .DS_Store
+
+# SME feedback written by capstone-sme-agent (re-run review to refresh)
+docs/*
+.cursor/*
+
+pnpm-lock.yaml
+.pnpm-store/*
