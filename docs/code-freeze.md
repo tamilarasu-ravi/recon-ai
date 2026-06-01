@@ -35,7 +35,7 @@ Eval mode for freeze sign-off: `LLM_ENABLE_LIVE_CALLS=false` (deterministic). Re
 
 ## Explicitly deferred (post-demo)
 
-Langfuse, MCP, Vercel deploy, full Kaggle corpus import, receipt UI upload, Playwright E2E.
+Vercel deploy, full Kaggle corpus import, Playwright E2E. (MCP, receipt UI, Langfuse shipped in stretch.)
 
 ## Showcase (Jun 14)
 

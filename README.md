@@ -874,7 +874,8 @@ pnpm dev                        # http://localhost:3000
 - [x] Seed 2 tenants + CoA + labeled txns (`pnpm db:seed`)
 - [x] Orchestrator: receive events → route → invoke agents → audit
 - [x] Observability fields on every agent run (`run_id`, step traces, cost — [§12 spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md#12-production-ai-engineering-layer))
-- [ ] Thin MCP server (deferred post-freeze)
+- [x] Thin MCP server (`pnpm mcp` — [mcp-setup.md](./docs/mcp-setup.md))
+- [x] Langfuse export (optional — [langfuse-setup.md](./docs/langfuse-setup.md))
 - [x] Tagging agent + confidence + tri-state + review queue UI
 - [x] Eval harness + `eval/tagging_eval.jsonl` (`pnpm eval:tagging`)
 - [x] Policy thin slice + receipt gate

@@ -57,6 +57,8 @@ export function TransactionDetailClient(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [glCode, setGlCode] = useState("6200");
   const [overrideMessage, setOverrideMessage] = useState<string | null>(null);
+  const [receiptText, setReceiptText] = useState("Receipt uploaded via UI");
+  const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
 
   const loadDetail = useCallback(async (): Promise<void> => {
     if (!tenantId || !transactionId) return;
@@ -82,6 +84,50 @@ export function TransactionDetailClient(): React.ReactElement {
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  async function submitReceipt(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    if (!tenantId) return;
+    setReceiptMessage(null);
+    try {
+      const response = await fetch("/api/receipts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          transaction_id: transactionId,
+          receipt_text: receiptText,
+        }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      }
+      setReceiptMessage("Receipt cleared — reprocess tagging to apply AUTO_TAG if eligible.");
+    } catch (err) {
+      setReceiptMessage(err instanceof Error ? err.message : "Receipt upload failed");
+    }
+  }
+
+  async function submitReprocess(): Promise<void> {
+    if (!tenantId) return;
+    setReceiptMessage(null);
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}/reprocess`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_id: tenantId }),
+      });
+      const body = (await response.json()) as { error?: string; decision?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      }
+      setReceiptMessage(`Reprocessed — decision: ${body.decision ?? "unknown"}`);
+      await loadDetail();
+    } catch (err) {
+      setReceiptMessage(err instanceof Error ? err.message : "Reprocess failed");
+    }
+  }
 
   async function submitOverride(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -205,6 +251,28 @@ export function TransactionDetailClient(): React.ReactElement {
             ) : (
               <p>No audit entries yet.</p>
             )}
+          </section>
+
+          <section style={{ marginTop: "1.5rem", padding: "1rem", background: "#fffbeb", borderRadius: 8 }}>
+            <h2 style={{ fontSize: "1.1rem", marginTop: 0 }}>Receipt (policy gate)</h2>
+            <p style={{ fontSize: "0.875rem", color: "#666" }}>
+              Upload mock receipt text, then reprocess tagging (demo steps 2–3).
+            </p>
+            <form onSubmit={(e) => void submitReceipt(e)} style={{ marginBottom: "0.75rem" }}>
+              <textarea
+                value={receiptText}
+                onChange={(e) => setReceiptText(e.target.value)}
+                rows={2}
+                style={{ width: "100%", padding: "0.35rem", marginBottom: "0.5rem" }}
+              />
+              <button type="submit" style={{ padding: "0.35rem 0.75rem", marginRight: "0.5rem" }}>
+                Upload receipt
+              </button>
+              <button type="button" onClick={() => void submitReprocess()} style={{ padding: "0.35rem 0.75rem" }}>
+                Reprocess tagging
+              </button>
+            </form>
+            {receiptMessage ? <p style={{ fontSize: "0.875rem" }}>{receiptMessage}</p> : null}
           </section>
 
           <section style={{ marginTop: "1.5rem" }}>

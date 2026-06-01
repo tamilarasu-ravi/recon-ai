@@ -1,5 +1,6 @@
 import type { DbClient } from "@/lib/db/client";
 import { auditLog, events } from "@/lib/db/schema";
+import { scheduleLangfuseExport } from "@/lib/observability/langfuse-export";
 
 export interface AppendEventInput {
   tenantId: string;
@@ -63,6 +64,8 @@ export async function appendAuditLog(db: DbClient, input: AppendAuditInput): Pro
       observability: input.observability,
     })
     .returning({ id: auditLog.id });
+
+  scheduleLangfuseExport(input);
 
   return row.id;
 }
