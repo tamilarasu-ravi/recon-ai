@@ -6,6 +6,7 @@ import {
   buildEmbeddingText,
   embedAndStoreTransaction,
 } from "@/lib/agents/tagging/embed-transaction";
+import { seedTenantPolicyPack } from "@/lib/agents/policy/seed-policies";
 import { hasProviderApiKey, loadEnv } from "@/lib/config/env";
 import { createDb } from "@/lib/db/client";
 import {
@@ -226,7 +227,10 @@ async function main(): Promise<void> {
       }
     }
 
-    console.log(`Seeded ${tenantSeed.slug}: CoA, vendors, rules, ${tenantSeed.labeledTxns.length} labeled txns`);
+    const policyPack = await seedTenantPolicyPack(db, tenantId);
+    console.log(
+      `Seeded ${tenantSeed.slug}: CoA, vendors, rules, ${tenantSeed.labeledTxns.length} labeled txns, policy ${policyPack.policyVersion}`,
+    );
   }
 
   console.log("Seed complete.");

@@ -12,3 +12,5 @@ docs/*
 
 pnpm-lock.yaml
 .pnpm-store/*
+
+tsconfig.tsbuildinfo

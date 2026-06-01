@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "eval:tagging": "tsx scripts/run-tagging-eval.ts"
+    "eval:tagging": "tsx scripts/run-tagging-eval.ts",
+    "test": "node --import tsx --test tests/unit/**/*.test.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",

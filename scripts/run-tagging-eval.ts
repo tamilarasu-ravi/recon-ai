@@ -106,15 +106,19 @@ async function main(): Promise<void> {
 
     const externalId = `eval-${evalCase.id}`;
     const timestamp = "2026-01-01T00:00:00.000Z";
-    const pipelineResult = await runTaggingPipeline(db, {
-      tenantId,
-      externalTransactionId: externalId,
-      transactionTimestamp: timestamp,
-      amount: evalCase.amount,
-      currency: "USD",
-      vendorRaw: evalCase.vendor_raw,
-      memo: evalCase.memo,
-    });
+    const pipelineResult = await runTaggingPipeline(
+      db,
+      {
+        tenantId,
+        externalTransactionId: externalId,
+        transactionTimestamp: timestamp,
+        amount: evalCase.amount,
+        currency: "USD",
+        vendorRaw: evalCase.vendor_raw,
+        memo: evalCase.memo,
+      },
+      { skipPolicy: true },
+    );
 
     const actualDecision = pipelineResult.decision ?? "REFUSE";
     let actualGlCode: string | undefined;
