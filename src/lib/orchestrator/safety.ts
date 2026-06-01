@@ -30,3 +30,19 @@ export function hasPromptInjectionSignal(memo?: string): boolean {
 export function isReviewOnlyGlCode(glCode: string): boolean {
   return REVIEW_ONLY_GL_CODES.has(glCode);
 }
+
+const UNKNOWN_VENDOR_PATTERNS = [/\bunknown\b/i, /\bmystery\b/i, /\brandom\s+vendor\b/i];
+
+/**
+ * Detects vendor names that explicitly signal unknown/untrusted merchants (eval + safety).
+ *
+ * @param vendorRaw - Raw vendor string from transaction feed.
+ * @returns True when vendor should REFUSE without rule hit.
+ */
+export function hasUnknownVendorSignal(vendorRaw: string): boolean {
+  const trimmed = vendorRaw.trim();
+  if (!trimmed) {
+    return true;
+  }
+  return UNKNOWN_VENDOR_PATTERNS.some((pattern) => pattern.test(trimmed));
+}

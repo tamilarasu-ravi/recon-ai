@@ -15,7 +15,11 @@ import { hasMinHistory, scoreConfidence } from "@/lib/confidence/scorer";
 import type { DbClient } from "@/lib/db/client";
 import { chartOfAccounts, transactions } from "@/lib/db/schema";
 import { applyTriStateGate, isGlInCoaAllowList, type TaggingDecision } from "@/lib/orchestrator/gates";
-import { hasPromptInjectionSignal, isReviewOnlyGlCode } from "@/lib/orchestrator/safety";
+import {
+  hasPromptInjectionSignal,
+  hasUnknownVendorSignal,
+  isReviewOnlyGlCode,
+} from "@/lib/orchestrator/safety";
 import { createLlmClient } from "@/lib/llm/client";
 
 export interface TaggingAgentInput {
@@ -223,6 +227,7 @@ export async function runTaggingAgent(
     promptInjectionDetected: hasPromptInjectionSignal(input.memo),
     reviewOnlyGl: suggestedGlCode ? isReviewOnlyGlCode(suggestedGlCode) : false,
     receiptRequiredAndNotCleared: receiptBlocked,
+    unknownVendorSignal: hasUnknownVendorSignal(input.vendorRaw),
     env,
   });
 

@@ -10,6 +10,9 @@ dist/
 docs/*
 !docs/eval-results.md
 !docs/demo-script.md
+!docs/showcase-deck.md
+!docs/dry-run-checklist.md
+!docs/code-freeze.md
 .cursor/*
 
 pnpm-lock.yaml

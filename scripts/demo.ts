@@ -170,7 +170,25 @@ async function main(): Promise<void> {
     throw new Error("Expected duplicate invoice refusal");
   }
 
-  console.log("\n✅ Demo complete — all steps passed.");
+  const tenantBId = await getTenantIdBySlug(db, "tenant-b");
+  const refuseResult = await runTaggingPipeline(db, {
+    tenantId: tenantBId,
+    externalTransactionId: demoExternalId(demoRunId, "refuse-courier"),
+    transactionTimestamp: DEMO_TIMESTAMP,
+    amount: "60.00",
+    currency: "USD",
+    vendorRaw: "Unknown Courier 42",
+    memo: "showcase refuse path",
+  });
+  logStep("9. REFUSE — unknown vendor (tenant-b)", refuseResult);
+  if (refuseResult.status === "duplicate") {
+    throw new Error("Unexpected duplicate on REFUSE step");
+  }
+  if (refuseResult.decision !== "REFUSE") {
+    throw new Error(`Expected REFUSE for unknown vendor, got ${refuseResult.decision}`);
+  }
+
+  console.log("\n✅ Demo complete — all steps passed (incl. REFUSE).");
 }
 
 main().catch((error: unknown) => {

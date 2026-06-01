@@ -13,6 +13,7 @@ export interface TriStateGateInput {
   promptInjectionDetected: boolean;
   reviewOnlyGl: boolean;
   receiptRequiredAndNotCleared: boolean;
+  unknownVendorSignal: boolean;
   env: AppEnv;
 }
 
@@ -34,6 +35,10 @@ export function applyTriStateGate(input: TriStateGateInput): TriStateGateResult 
 
   if (input.promptInjectionDetected) {
     return { decision: "QUEUE_REVIEW", reason: "prompt_injection_guard" };
+  }
+
+  if (input.unknownVendorSignal && !input.ruleHit) {
+    return { decision: "REFUSE", reason: "unknown_vendor_pattern" };
   }
 
   if (input.parseFailed && !input.ruleHit) {

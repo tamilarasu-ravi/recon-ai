@@ -2,11 +2,11 @@ import { createHash } from "node:crypto";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { config as loadDotenv } from "dotenv";
-import { like } from "drizzle-orm";
+import { and, eq, like, not } from "drizzle-orm";
 import { loadEnv } from "@/lib/config/env";
 import { createDb } from "@/lib/db/client";
 import type { DbClient } from "@/lib/db/client";
-import { chartOfAccounts, tenants, transactions } from "@/lib/db/schema";
+import { chartOfAccounts, tenants, transactions, vendorRules, vendors } from "@/lib/db/schema";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
 
@@ -54,6 +54,45 @@ async function cleanupEvalTransactions(db: DbClient): Promise<number> {
   return deleted.length;
 }
 
+/** Vendor canonical names that may gain learned rules from `pnpm demo` — cleared before eval. */
+const DEMO_LEARNED_VENDOR_CANONICALS = ["zephyr labs llc"];
+
+/**
+ * Removes vendor rules created by demo overrides so eval case-05 stays cold-start.
+ *
+ * @param db - Database client.
+ * @returns Number of vendor_rules rows deleted.
+ */
+async function cleanupDemoLearnedVendorState(db: DbClient): Promise<number> {
+  let removed = 0;
+  for (const canonical of DEMO_LEARNED_VENDOR_CANONICALS) {
+    const vendorRows = await db
+      .select({ id: vendors.id })
+      .from(vendors)
+      .where(eq(vendors.canonicalName, canonical));
+    for (const vendor of vendorRows) {
+      const deletedRules = await db
+        .delete(vendorRules)
+        .where(eq(vendorRules.vendorId, vendor.id))
+        .returning({ id: vendorRules.id });
+      removed += deletedRules.length;
+
+      await db
+        .delete(transactions)
+        .where(
+          and(
+            eq(transactions.vendorId, vendor.id),
+            not(like(transactions.externalTransactionId, "seed-%")),
+            not(like(transactions.externalTransactionId, "eval-%")),
+          ),
+        );
+
+      await db.delete(vendors).where(eq(vendors.id, vendor.id));
+    }
+  }
+  return removed;
+}
+
 /**
  * Loads eval cases from JSONL file.
  *
@@ -80,6 +119,10 @@ async function main(): Promise<void> {
   const removed = await cleanupEvalTransactions(db);
   if (removed > 0) {
     console.log(`Cleared ${removed} prior eval transaction(s) for a fresh run`);
+  }
+  const rulesRemoved = await cleanupDemoLearnedVendorState(db);
+  if (rulesRemoved > 0) {
+    console.log(`Cleared ${rulesRemoved} demo-learned vendor rule(s) for reproducible eval`);
   }
   const cases = loadEvalCases(EVAL_FILE);
 

@@ -8,9 +8,17 @@
 pnpm demo
 ```
 
-Walk through the eight printed steps (tagging, receipt, override, AP duplicate).
+Walk through the nine printed steps (tagging, receipt, override, AP duplicate, **REFUSE**).
 
-## Option B — Live API (for showcase)
+## Option B — UI + API (for showcase)
+
+```bash
+pnpm dev
+```
+
+Open **http://localhost:3000/review-queue** — filter open items, click **Why & override** for audit trace and GL override form. Run `pnpm demo` first to populate queue items.
+
+## Option C — Live API only
 
 ```bash
 pnpm dev
@@ -81,10 +89,20 @@ curl -s -X POST http://localhost:3000/api/ingest/invoices \
 
 Repeat same vendor/amount/date → **409 duplicate**, audit “would pay” only.
 
-## Backup slide — REFUSE
+## Backup slide — REFUSE (step 9 in `pnpm demo`)
 
-Unknown vendor, no rule, weak retrieval → `REFUSE` (not silent wrong GL). Run eval case-06 or ingest `Unknown Vendor XYZ 999`.
+**Say:** “We refuse to guess GL on explicitly unknown merchants — better than silent miscoding.”
+
+Demo step 9 ingests `Unknown Courier 42` on **tenant-b** → `REFUSE` with reason `unknown_vendor_pattern`. Show in UI: `/review-queue` (tenant-b) or transaction detail.
+
+Manual ingest:
+
+```bash
+curl -s -X POST http://localhost:3000/api/ingest/transactions \
+  -H "Content-Type: application/json" \
+  -d "{\"tenant_id\":\"$TENANT_B_ID\",\"external_transaction_id\":\"live-refuse-1\",\"transaction_timestamp\":\"2026-06-01T12:00:00Z\",\"amount\":\"60.00\",\"currency\":\"USD\",\"vendor_raw\":\"Unknown Courier 42\"}" | jq
+```
 
 ## Eval mention
 
-`pnpm eval:tagging` — 30 golden cases, 80% pass, 100% auto-tag precision, red-team case-08 safe.
+`pnpm eval:tagging` — 30 golden cases, **100% pass**, **100% auto-tag precision**, red-team case-08 safe. See `docs/eval-results.md`.

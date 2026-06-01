@@ -6,8 +6,8 @@
 | **Author**       | _Your Name_ (`your.email@example.com`)                             |
 | **Institution**  | _Your program / university_                                        |
 | **Timeline**     | Build **May 28 – Jun 10** · Buffer **Jun 11–13** · **Demo Jun 14** |
-| **Status**       | Planning → implementation                                          |
-| **Last updated** | May 30, 2026                                                       |
+| **Status**       | Feature-complete (freeze Jun 10) · showcase Jun 14                |
+| **Last updated** | June 1, 2026                                                       |
 | **Code freeze**  | **June 10, 2026**                                                  |
 | **Showcase**     | **June 14, 2026**                                                  |
 
@@ -736,16 +736,18 @@ Rehearsed path — no live improvisation.
 
 ## Deliverables checklist
 
-- [ ] Unified story — all three workflows on one platform (this README + architecture doc)
-- [ ] Architecture diagram — one orchestrator, three agents, shared vendor/tenant store
-- [ ] One **deep** workflow — tagging with cold start + override learning
-- [ ] Cross-workflow hook — policy gate before auto-tag
-- [ ] **“Don’t know”** — `REFUSE` on unknown vendor (not wrong GL)
-- [ ] Evals — table over ~30 examples (beats hand-waving)
-- [ ] 2-page architecture write-up (orchestrator vs agents)
-- [ ] Eval tables: tagging; policy FP note; AP duplicate + forecast sanity
-- [ ] **“Production next”** section (real ERP, pre-auth policy, OR-Tools for AP)
-- [ ] 3-minute demo script (rehearsed)
+- [x] Unified story — all three workflows on one platform (this README + [architecture doc](./docs/architecture.md))
+- [x] Architecture diagram — one orchestrator, three agents, shared vendor/tenant store
+- [x] One **deep** workflow — tagging with cold start + override learning (`pnpm demo` steps 4–6)
+- [x] Cross-workflow hook — policy gate before auto-tag (receipt blocks `AUTO_TAG`)
+- [x] **“Don’t know”** — `REFUSE` on unknown vendor (`pnpm demo` step 9; eval cases 06–07, 14–15)
+- [x] Evals — 30 JSONL cases; [eval-results.md](./docs/eval-results.md) (100% pass, 100% auto-tag precision)
+- [x] Architecture write-up — [architecture.md](./docs/architecture.md) (orchestrator vs agents, implement-now vs defer)
+- [x] Eval tables: tagging; policy + AP covered in E2E demo (AP duplicate; forecast stub only)
+- [x] **“Production next”** section below + [production-at-scale.md](./docs/production-at-scale.md)
+- [x] Demo script + deck — [demo-script.md](./docs/demo-script.md), [showcase-deck.md](./docs/showcase-deck.md)
+- [ ] **Author** name/email in header table (required before submission)
+- [ ] Git tag **`v0.1.0-demo`** after final commit — see [code-freeze.md](./docs/code-freeze.md)
 
 ---
 
@@ -809,6 +811,9 @@ capstone-project/
 │   ├── capstone-requirements-and-evals.md # Problem, data processing, eval criteria
 │   ├── demo-script.md          # 3-minute rehearsed path
 │   ├── eval-results.md         # Metric tables + failure notes
+│   ├── showcase-deck.md        # 5-slide Jun 14 deck + speaker notes
+│   ├── dry-run-checklist.md    # Rehearsal checklist (Jun 9–13)
+│   ├── code-freeze.md          # G4 verification + tag instructions
 │   ├── planning/
 │   │   └── phase-status.md     # Planner phases 0–7 done/partial/missing
 │   └── superpowers/specs/
@@ -819,7 +824,8 @@ capstone-project/
 │   │   │   ├── transactions/
 │   │   │   ├── review-queue/
 │   │   │   └── ingest/         # mock txn + invoice
-│   │   └── review/             # HITL pages
+│   │   ├── review-queue/       # HITL list UI
+│   │   └── transactions/       # Detail + override UI
 │   ├── lib/
 │   │   ├── db/                 # schema + queries
 │   │   ├── orchestrator/       # events in → route → agents → audit out
@@ -863,17 +869,19 @@ pnpm dev                        # http://localhost:3000
 
 ## Getting started (implementation checklist)
 
-- [ ] Scaffold Next.js + Postgres + pgvector (`docker compose up`)
-- [ ] Implement schema + migrations (`tenants` → `events` / `audit_log`)
-- [ ] Seed 2 tenants + CoA + 50–100 synthetic txns
-- [ ] Orchestrator: receive events → route → invoke agents → audit
-- [ ] Observability fields on every agent run (`run_id`, latency, confidence, step traces, cost — see [§12 spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md#12-production-ai-engineering-layer))
-- [ ] Thin MCP server (optional week 2): same tools as internal API
-- [ ] Tagging agent + confidence + tri-state + review queue
-- [ ] Eval harness + `eval/tagging_eval.jsonl` (week 1)
-- [ ] Policy thin slice + receipt gate
-- [ ] AP stub + duplicate check
-- [ ] `docs/architecture.md` + demo script + eval results table
+- [x] Scaffold Next.js + Postgres + pgvector (`docker compose up`)
+- [x] Implement schema + migrations (`tenants` → `events` / `audit_log`)
+- [x] Seed 2 tenants + CoA + labeled txns (`pnpm db:seed`)
+- [x] Orchestrator: receive events → route → invoke agents → audit
+- [x] Observability fields on every agent run (`run_id`, step traces, cost — [§12 spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md#12-production-ai-engineering-layer))
+- [ ] Thin MCP server (deferred post-freeze)
+- [x] Tagging agent + confidence + tri-state + review queue UI
+- [x] Eval harness + `eval/tagging_eval.jsonl` (`pnpm eval:tagging`)
+- [x] Policy thin slice + receipt gate
+- [x] AP stub + duplicate check
+- [x] `docs/architecture.md` + demo script + eval results table
+
+**Freeze sign-off:** [docs/code-freeze.md](./docs/code-freeze.md)
 
 ---
 
