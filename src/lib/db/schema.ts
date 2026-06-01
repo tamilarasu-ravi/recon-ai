@@ -148,12 +148,23 @@ export const transactions = pgTable(
     memo: text("memo"),
     mcc: text("mcc"),
     vendorId: uuid("vendor_id").references(() => vendors.id, { onDelete: "set null" }),
+    glAccountId: uuid("gl_account_id").references(() => chartOfAccounts.id, {
+      onDelete: "set null",
+    }),
+    suggestedGlAccountId: uuid("suggested_gl_account_id").references(() => chartOfAccounts.id, {
+      onDelete: "set null",
+    }),
+    taggingDecision: taggingDecisionEnum("tagging_decision"),
+    confidence: numeric("confidence", { precision: 5, scale: 4 }),
+    taxCode: text("tax_code"),
+    dimensions: jsonb("dimensions"),
     processingStatus: processingStatusEnum("processing_status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("transactions_tenant_id_idx").on(table.tenantId),
+    index("transactions_tenant_labeled_gl_idx").on(table.tenantId, table.glAccountId),
     uniqueIndex("transactions_tenant_idempotency_uidx").on(table.tenantId, table.idempotencyKey),
     uniqueIndex("transactions_tenant_external_txn_uidx").on(
       table.tenantId,

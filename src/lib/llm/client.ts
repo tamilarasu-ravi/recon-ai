@@ -106,14 +106,8 @@ export function createLlmClient(env: AppEnv) {
       throw new LlmUnavailableError("LLM_ENABLE_LIVE_CALLS=false");
     }
 
-    if (env.LLM_PROVIDER === "google" && googleClient) {
-      const model = googleClient.getGenerativeModel({ model: env.EMBEDDING_MODEL });
-      const result = await model.embedContent(text);
-      const values = result.embedding.values;
-      if (!values?.length) {
-        throw new LlmUnavailableError("Google embedding returned empty vector");
-      }
-      return values;
+    if (env.LLM_PROVIDER === "google" && env.GOOGLE_API_KEY) {
+      return embedGoogleText(env, text);
     }
 
     if (env.LLM_PROVIDER === "openai" && openaiClient) {
@@ -208,6 +202,68 @@ async function callOpenAiStructured<T>(
     costUsd: estimateCostUsd("openai", env.LLM_MODEL, { promptTokens, completionTokens }),
     latencyMs: Date.now() - startedAt,
   };
+}
+
+interface GoogleEmbedContentResponse {
+  embedding?: { values?: number[] };
+  error?: { message?: string };
+}
+
+/**
+ * Embeds text via Gemini API with output dimensionality matching pgvector schema.
+ *
+ * @param env - Application environment (must include GOOGLE_API_KEY).
+ * @param text - Input text.
+ * @returns Embedding vector of length env.EMBEDDING_DIMENSIONS.
+ * @throws LlmUnavailableError when the API returns an error or empty vector.
+ */
+async function embedGoogleText(env: AppEnv, text: string): Promise<number[]> {
+  const apiKey = env.GOOGLE_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new LlmUnavailableError("GOOGLE_API_KEY is not configured");
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content: { parts: [{ text }] },
+      taskType: "RETRIEVAL_DOCUMENT",
+      outputDimensionality: env.EMBEDDING_DIMENSIONS,
+    }),
+  });
+
+  const payload = (await response.json()) as GoogleEmbedContentResponse;
+  if (!response.ok) {
+    throw new LlmUnavailableError(
+      payload.error?.message ?? `Google embedding HTTP ${response.status}`,
+    );
+  }
+
+  const values = payload.embedding?.values;
+  if (!values?.length) {
+    throw new LlmUnavailableError("Google embedding returned empty vector");
+  }
+
+  if (values.length === env.EMBEDDING_DIMENSIONS) {
+    return values;
+  }
+
+  return truncateAndNormalizeEmbedding(values, env.EMBEDDING_DIMENSIONS);
+}
+
+/**
+ * Truncates a Matryoshka embedding to the target size and re-normalizes.
+ *
+ * @param vector - Source embedding (typically 3072-d from gemini-embedding-001).
+ * @param dimensions - Target dimension count (e.g. 768 for pgvector column).
+ * @returns Unit-length vector of length dimensions.
+ */
+function truncateAndNormalizeEmbedding(vector: number[], dimensions: number): number[] {
+  const truncated = vector.slice(0, dimensions);
+  const magnitude = Math.sqrt(truncated.reduce((sum, value) => sum + value * value, 0)) || 1;
+  return truncated.map((value) => value / magnitude);
 }
 
 function hashPrompt(systemPrompt: string, userPrompt: string): string {

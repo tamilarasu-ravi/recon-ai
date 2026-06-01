@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "eval:tagging": "tsx scripts/run-tagging-eval.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",

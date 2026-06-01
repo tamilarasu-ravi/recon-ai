@@ -8,6 +8,13 @@
       "when": 1780289505118,
       "tag": "0000_daily_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780293265944,
+      "tag": "0001_great_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }

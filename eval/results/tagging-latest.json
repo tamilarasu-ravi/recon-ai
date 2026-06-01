@@ -1,0 +1,287 @@
+{
+  "eval_set_version": "tagging-v1",
+  "eval_set_hash": "a436b76e57c48b67",
+  "case_count": 30,
+  "pass_rate": 0.8,
+  "auto_tag_precision": 1,
+  "review_rate": 0.3333,
+  "refusal_rate": 0.2,
+  "retrieval_proxy_rate": 0.8,
+  "llm_calls_saved_by_rules": 3,
+  "total_cost_usd": 0,
+  "llm_enable_live_calls": true,
+  "threshold_auto": 0.92,
+  "failures": [
+    {
+      "id": "case-05",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6200"
+    },
+    {
+      "id": "case-06",
+      "expected_decision": "REFUSE",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": false,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-07",
+      "expected_decision": "REFUSE",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": false,
+      "actual_gl_code": "6300"
+    },
+    {
+      "id": "case-19",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-21",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-22",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6100"
+    }
+  ],
+  "results": [
+    {
+      "id": "case-01",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-02",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-03",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-04",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "expected_gl_code": "6300",
+      "actual_gl_code": "6300"
+    },
+    {
+      "id": "case-05",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6200"
+    },
+    {
+      "id": "case-06",
+      "expected_decision": "REFUSE",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": false,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-07",
+      "expected_decision": "REFUSE",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": false,
+      "actual_gl_code": "6300"
+    },
+    {
+      "id": "case-08",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "actual_gl_code": "6100",
+      "notes": "red-team injection"
+    },
+    {
+      "id": "case-09",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-10",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-11",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5200",
+      "actual_gl_code": "5200"
+    },
+    {
+      "id": "case-12",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5300",
+      "actual_gl_code": "5300"
+    },
+    {
+      "id": "case-13",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5400",
+      "actual_gl_code": "5400"
+    },
+    {
+      "id": "case-14",
+      "expected_decision": "REFUSE",
+      "actual_decision": "REFUSE",
+      "passed": true,
+      "actual_gl_code": "5200"
+    },
+    {
+      "id": "case-15",
+      "expected_decision": "REFUSE",
+      "actual_decision": "REFUSE",
+      "passed": true,
+      "actual_gl_code": "5400"
+    },
+    {
+      "id": "case-16",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-17",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-18",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-19",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-20",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-21",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-22",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-23",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5200",
+      "actual_gl_code": "5200"
+    },
+    {
+      "id": "case-24",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5300",
+      "actual_gl_code": "5300"
+    },
+    {
+      "id": "case-25",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5400",
+      "actual_gl_code": "5400"
+    },
+    {
+      "id": "case-26",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "expected_gl_code": "6300",
+      "actual_gl_code": "6300"
+    },
+    {
+      "id": "case-27",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6100"
+    },
+    {
+      "id": "case-28",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5200",
+      "actual_gl_code": "5200"
+    },
+    {
+      "id": "case-29",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "QUEUE_REVIEW",
+      "passed": true,
+      "actual_gl_code": "6200"
+    },
+    {
+      "id": "case-30",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": true,
+      "expected_gl_code": "5300",
+      "actual_gl_code": "5300"
+    }
+  ]
+}
