@@ -6,6 +6,7 @@ import {
   buildEmbeddingText,
   embedAndStoreTransaction,
 } from "@/lib/agents/tagging/embed-transaction";
+import { seedMockInvoicesForTenant } from "@/lib/agents/ap/seed-invoices";
 import { seedTenantPolicyPack } from "@/lib/agents/policy/seed-policies";
 import { hasProviderApiKey, loadEnv } from "@/lib/config/env";
 import { createDb } from "@/lib/db/client";
@@ -228,8 +229,9 @@ async function main(): Promise<void> {
     }
 
     const policyPack = await seedTenantPolicyPack(db, tenantId);
+    const invoiceCount = await seedMockInvoicesForTenant(db, tenantSeed.slug);
     console.log(
-      `Seeded ${tenantSeed.slug}: CoA, vendors, rules, ${tenantSeed.labeledTxns.length} labeled txns, policy ${policyPack.policyVersion}`,
+      `Seeded ${tenantSeed.slug}: CoA, vendors, rules, ${tenantSeed.labeledTxns.length} labeled txns, policy ${policyPack.policyVersion}, ${invoiceCount} invoices`,
     );
   }
 
