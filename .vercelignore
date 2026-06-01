@@ -1,0 +1,6 @@
+data/archive/**
+docs/**
+capstone-poc-planner/**
+.cursor/**
+*.md
+!README.md

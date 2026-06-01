@@ -4,6 +4,9 @@ import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import { reprocessTransactionTagging } from "@/lib/orchestrator/reprocess-tagging";
 
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 const reprocessSchema = z.object({
   tenant_id: z.string().uuid(),
 });

@@ -814,6 +814,8 @@ capstone-project/
 │   ├── showcase-deck.md        # 5-slide Jun 14 deck + speaker notes
 │   ├── dry-run-checklist.md    # Rehearsal checklist (Jun 9–13)
 │   ├── code-freeze.md          # G4 verification + tag instructions
+│   ├── vercel-deploy.md        # Optional Neon + Vercel showcase URL
+│   ├── buffer-week.md          # Jun 11–13 rehearsal plan
 │   ├── planning/
 │   │   └── phase-status.md     # Planner phases 0–7 done/partial/missing
 │   └── superpowers/specs/

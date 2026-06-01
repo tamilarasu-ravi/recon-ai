@@ -4,6 +4,10 @@ import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 
+/** Allow tagging pipeline + optional LLM on Vercel (Pro plan may be required for >10s). */
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 const ingestSchema = z.object({
   tenant_id: z.string().uuid(),
   external_transaction_id: z.string().min(1).max(128),

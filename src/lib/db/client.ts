@@ -16,7 +16,12 @@ export function createDb(connectionString?: string) {
     throw new Error("DATABASE_URL is required");
   }
 
-  const client = postgres(url, { max: 10 });
+  const isServerless = Boolean(process.env.VERCEL);
+  const client = postgres(url, {
+    max: isServerless ? 1 : 10,
+    // Required when using Neon/Vercel pooler (PgBouncer transaction mode).
+    prepare: isServerless ? false : undefined,
+  });
   return drizzle(client, { schema });
 }
 

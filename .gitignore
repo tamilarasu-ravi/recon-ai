@@ -6,16 +6,8 @@ dist/
 .venv-pdf/
 .DS_Store
 
-# SME feedback written by capstone-sme-agent (re-run review to refresh)
+# Planning / SME docs — local only (not committed)
 docs/*
-!docs/eval-results.md
-!docs/demo-script.md
-!docs/showcase-deck.md
-!docs/dry-run-checklist.md
-!docs/code-freeze.md
-!docs/mcp-setup.md
-!docs/stretch-roadmap.md
-!docs/langfuse-setup.md
 .cursor/*
 
 pnpm-lock.yaml

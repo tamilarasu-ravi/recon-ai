@@ -4,6 +4,9 @@ import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import { runApPipeline } from "@/lib/orchestrator/run-ap-pipeline";
 
+export const maxDuration = 30;
+export const dynamic = "force-dynamic";
+
 const ingestInvoiceSchema = z.object({
   tenant_id: z.string().uuid(),
   external_invoice_id: z.string().min(1).max(128),
