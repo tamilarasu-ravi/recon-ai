@@ -32,20 +32,39 @@ export function getClientApiKey(): string | null {
   return value && value.length > 0 ? value : null;
 }
 
+export interface ApiFetchOptions {
+  /** When true, do not attach Authorization (bootstrap / first-key flows). */
+  omitApiKey?: boolean;
+}
+
 /**
  * Fetch wrapper that attaches API key headers for same-origin API routes.
  *
  * @param input - URL or Request.
  * @param init - Standard fetch init.
+ * @param options - Optional flags to skip sending a stored API key.
  * @returns Fetch response.
  */
-export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function apiFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  options?: ApiFetchOptions,
+): Promise<Response> {
   const headers = new Headers(init?.headers);
-  const apiKey = getClientApiKey();
 
-  if (apiKey) {
-    headers.set("Authorization", `Bearer ${apiKey}`);
+  if (!options?.omitApiKey) {
+    const apiKey = getClientApiKey();
+    if (apiKey) {
+      headers.set("Authorization", `Bearer ${apiKey}`);
+    }
   }
 
   return fetch(input, { ...init, headers });
+}
+
+/**
+ * Removes the browser-stored API key from sessionStorage.
+ */
+export function clearClientApiKey(): void {
+  setClientApiKey("");
 }

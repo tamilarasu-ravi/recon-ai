@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { getDb } from "@/lib/db/client";
-import { tenants } from "@/lib/db/schema";
+import { listTenantsForCaller } from "@/lib/api/require-authenticated";
+import { toRouteErrorResponse } from "@/lib/api/tenant-auth";
 
 /**
- * Lists seeded tenants (dev/demo helper — no auth).
+ * Lists tenants visible to the caller (all in dev; API-key tenant only when auth is on).
  */
-export async function GET(): Promise<NextResponse> {
-  const db = getDb();
-  const rows = await db
-    .select({ id: tenants.id, slug: tenants.slug, name: tenants.name })
-    .from(tenants);
-
-  return NextResponse.json({ tenants: rows });
+export async function GET(request: Request): Promise<NextResponse> {
+  try {
+    const rows = await listTenantsForCaller(request);
+    return NextResponse.json({ tenants: rows });
+  } catch (error) {
+    return toRouteErrorResponse(error, "Tenant list failed");
+  }
 }

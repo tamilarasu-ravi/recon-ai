@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { assertTenantScope, authorizeApiRequest } from "@/lib/auth/api-auth";
 import type { ApiAuthContext } from "@/lib/auth/api-auth";
+import { assertTenantApiRateLimit } from "@/lib/api/apply-rate-limit";
 import { getDb } from "@/lib/db/client";
+import { RateLimitExceededError } from "@/lib/security/rate-limit";
 
 /**
  * Authorizes an API request and validates tenant scope when auth is enabled.
@@ -19,6 +21,7 @@ export async function requireTenantAccess(
   const db = getDb();
   const auth = await authorizeApiRequest(db, request);
   assertTenantScope(auth, tenantId);
+  assertTenantApiRateLimit(tenantId, "tenant-api");
   return auth;
 }
 
@@ -30,8 +33,36 @@ export async function requireTenantAccess(
  * @returns NextResponse with appropriate status.
  */
 export function toRouteErrorResponse(error: unknown, fallbackMessage: string): NextResponse {
+  if (error instanceof RateLimitExceededError) {
+    return NextResponse.json(
+      { error: error.message },
+      {
+        status: 429,
+        headers: { "Retry-After": String(error.retryAfterSec) },
+      },
+    );
+  }
+
   const message = error instanceof Error ? error.message : fallbackMessage;
-  const status =
-    message.includes("API key") || message.includes("authorized") ? 401 : 400;
+  const status = resolveRouteErrorStatus(message);
   return NextResponse.json({ error: message }, { status });
+}
+
+/**
+ * Maps error messages to HTTP status codes for API routes.
+ *
+ * @param message - Error message text.
+ * @returns HTTP status code.
+ */
+function resolveRouteErrorStatus(message: string): number {
+  if (message.includes("Forbidden:")) {
+    return 403;
+  }
+  if (message.includes("API key") || message.includes("Invalid or inactive")) {
+    return 401;
+  }
+  if (message.includes("not found") || message.includes("Unknown tenant")) {
+    return 404;
+  }
+  return 400;
 }

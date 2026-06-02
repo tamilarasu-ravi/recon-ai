@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { assertIngestRateLimit } from "@/lib/api/apply-rate-limit";
 import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { getDb } from "@/lib/db/client";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
@@ -28,6 +29,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body: unknown = await request.json();
     const parsed = ingestSchema.parse(body);
     await requireTenantAccess(request, parsed.tenant_id);
+    assertIngestRateLimit(parsed.tenant_id, "ingest-transactions");
 
     const db = getDb();
 

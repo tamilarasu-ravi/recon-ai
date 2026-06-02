@@ -1,22 +1,16 @@
 import { and, eq } from "drizzle-orm";
 
 import { hashApiKey } from "@/lib/auth/api-key-crypto";
+import { isApiAuthRequired, isProductionDeployment } from "@/lib/config/runtime";
 import type { DbClient } from "@/lib/db/client";
 import { apiKeys } from "@/lib/db/schema";
+
+export { isApiAuthRequired };
 
 export interface ApiAuthContext {
   tenantId: string;
   apiKeyId: string;
   keyPrefix: string;
-}
-
-/**
- * Reads whether API authentication is required from environment.
- *
- * @returns True when REQUIRE_API_AUTH is set to true.
- */
-export function isApiAuthRequired(): boolean {
-  return process.env.REQUIRE_API_AUTH?.trim().toLowerCase() === "true";
 }
 
 /**
@@ -83,7 +77,7 @@ export async function authorizeApiRequest(
   db: DbClient,
   request: Request,
 ): Promise<ApiAuthContext | null> {
-  if (!isApiAuthRequired()) {
+  if (!isApiAuthRequired() && !isProductionDeployment()) {
     return null;
   }
 
@@ -113,6 +107,6 @@ export function assertTenantScope(auth: ApiAuthContext | null, tenantId: string)
   }
 
   if (auth.tenantId !== tenantId) {
-    throw new Error("API key is not authorized for this tenant");
+    throw new Error("Forbidden: API key is not authorized for this tenant");
   }
 }

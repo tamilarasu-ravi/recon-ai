@@ -74,7 +74,7 @@ export default function HomePage(): React.ReactElement {
           <span className="hero__pipe">Eval-gated releases</span>
         </div>
         <p style={{ margin: "1rem 0 0", fontSize: "0.9375rem", color: "var(--color-text-muted)", maxWidth: "42rem" }}>
-          Roadmap: <code>STRATEGY.md</code> · Walkthrough:{" "}
+          Production: <code>docs/production-roadmap.md</code> · Walkthrough:{" "}
           <code>docs/guides/orchestrator-walkthrough.md</code>
         </p>
       </section>
@@ -114,10 +114,11 @@ export default function HomePage(): React.ReactElement {
           </p>
         </Link>
         <div className="card">
-          <h2 className="card__title">Automation</h2>
+          <h2 className="card__title">Quality gates</h2>
           <p className="card__desc">
-            <code>pnpm demo</code> — E2E path. <code>pnpm mcp</code> — agent tools.{" "}
-            <code>pnpm eval:tagging</code> — regression gate.
+            <code>pnpm production:check</code> — prod env validation.{" "}
+            <code>pnpm showcase:prep</code> — tests + eval + build.{" "}
+            <code>GET /api/ready</code> — deploy readiness.
           </p>
         </div>
       </div>

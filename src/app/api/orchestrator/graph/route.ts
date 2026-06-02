@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { requireAuthenticatedApi } from "@/lib/api/require-authenticated";
+import { toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { exportLiveMermaid, getOrchestratorGraphMetadata } from "@/lib/orchestrator/langgraph/graph-metadata";
 import { getApGraph } from "@/lib/orchestrator/langgraph/ap-graph";
 import { getTaggingGraph } from "@/lib/orchestrator/langgraph/tagging-graph";
@@ -9,7 +11,13 @@ import { getTaggingGraph } from "@/lib/orchestrator/langgraph/tagging-graph";
  *
  * @returns JSON with static and live Mermaid diagrams for tagging and AP graphs.
  */
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
+  try {
+    await requireAuthenticatedApi(request);
+  } catch (error) {
+    return toRouteErrorResponse(error, "Orchestrator graph fetch failed");
+  }
+
   const metadata = getOrchestratorGraphMetadata();
 
   const [taggingLiveMermaid, apLiveMermaid] = await Promise.all([

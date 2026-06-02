@@ -4,7 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 
 import { PageLayout } from "@/app/components/page-layout";
 import { useTenant } from "@/app/components/tenant-provider";
-import { apiFetch, getClientApiKey, setClientApiKey } from "@/lib/ui/api-fetch";
+import {
+  apiFetch,
+  clearClientApiKey,
+  getClientApiKey,
+  setClientApiKey,
+} from "@/lib/ui/api-fetch";
 
 interface ApiKeyListItem {
   id: string;
@@ -28,23 +33,69 @@ interface WebhookSecretListItem {
  * @returns Settings page.
  */
 export function SettingsClient(): React.ReactElement {
-  const { tenantId, loading: tenantLoading } = useTenant();
+  const { tenantId, loading: tenantLoading, error: tenantError, reloadTenants } = useTenant();
   const [keys, setKeys] = useState<ApiKeyListItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState(getClientApiKey() ?? "");
   const [newKeyName, setNewKeyName] = useState("integration");
+  const [bootstrapSlug, setBootstrapSlug] = useState("tenant-a");
+  const [bootstrapSlugs, setBootstrapSlugs] = useState<string[]>(["tenant-a", "tenant-b"]);
+  const [requireApiAuth, setRequireApiAuth] = useState(false);
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [webhookSecrets, setWebhookSecrets] = useState<WebhookSecretListItem[]>([]);
   const [newWebhookName, setNewWebhookName] = useState("card-processor");
   const [createdRawWebhookSecret, setCreatedRawWebhookSecret] = useState<string | null>(null);
+  const [erpProvider, setErpProvider] = useState("mock");
+
+  const needsBootstrap = requireApiAuth && !tenantId && !getClientApiKey();
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch("/api/settings/public");
+        if (response.ok) {
+          const data = (await response.json()) as {
+            erp_provider: string;
+            require_api_auth: boolean;
+          };
+          setErpProvider(data.erp_provider);
+          setRequireApiAuth(data.require_api_auth);
+        }
+      } catch {
+        setErpProvider("mock");
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!needsBootstrap) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/tenants/bootstrap-slugs");
+        if (response.ok) {
+          const data = (await response.json()) as { slugs: string[] };
+          if (data.slugs.length > 0) {
+            setBootstrapSlugs(data.slugs);
+            setBootstrapSlug(data.slugs[0] ?? "tenant-a");
+          }
+        }
+      } catch {
+        // keep defaults
+      }
+    })();
+  }, [needsBootstrap]);
 
   const loadKeys = useCallback(async (): Promise<void> => {
     if (!tenantId) {
       return;
     }
 
-    setLoading(true);
+    setListLoading(true);
     setError(null);
 
     try {
@@ -72,7 +123,7 @@ export function SettingsClient(): React.ReactElement {
       setKeys([]);
       setWebhookSecrets([]);
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
   }, [tenantId]);
 
@@ -85,14 +136,23 @@ export function SettingsClient(): React.ReactElement {
   function saveBrowserKey(): void {
     setClientApiKey(apiKeyInput);
     setError(null);
+    void reloadTenants();
+  }
+
+  function clearSavedBrowserKey(): void {
+    clearClientApiKey();
+    setApiKeyInput("");
+    setError(null);
+    setCreatedRawKey(null);
   }
 
   async function createWebhookSecret(): Promise<void> {
     if (!tenantId) {
+      setError("Select a tenant first — save an API key and reload, or use Generate key below.");
       return;
     }
 
-    setLoading(true);
+    setActionLoading(true);
     setCreatedRawWebhookSecret(null);
 
     try {
@@ -113,53 +173,75 @@ export function SettingsClient(): React.ReactElement {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create webhook secret");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   }
 
   async function createKey(): Promise<void> {
-    if (!tenantId) {
-      return;
-    }
-
-    setLoading(true);
+    setActionLoading(true);
     setCreatedRawKey(null);
+    setError(null);
 
     try {
-      const response = await apiFetch("/api/api-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tenantId, name: newKeyName }),
-      });
+      const payload = tenantId
+        ? { tenant_id: tenantId, name: newKeyName }
+        : { tenant_slug: bootstrapSlug, name: newKeyName };
+
+      const response = await apiFetch(
+        "/api/api-keys",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        { omitApiKey: !tenantId },
+      );
 
       if (!response.ok) {
         const body = (await response.json()) as { error?: string };
-        throw new Error(body.error ?? `HTTP ${response.status}`);
+        const message = body.error ?? `HTTP ${response.status}`;
+        if (response.status === 401) {
+          throw new Error(
+            `${message} Run in terminal: pnpm auth:reset-keys — then paste the new recon_… key here and Save.`,
+          );
+        }
+        throw new Error(message);
       }
 
       const data = (await response.json()) as { raw_key: string };
       setCreatedRawKey(data.raw_key);
       setApiKeyInput(data.raw_key);
       setClientApiKey(data.raw_key);
-      await loadKeys();
+      await reloadTenants();
+      if (tenantId) {
+        await loadKeys();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create API key");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   }
 
-  const erpProvider = process.env.NEXT_PUBLIC_ERP_PROVIDER ?? "mock (server ERP_PROVIDER)";
+  const canGenerateKey = Boolean(tenantId ?? bootstrapSlug) && !actionLoading;
 
   return (
     <PageLayout
       title="Settings"
       subtitle="API keys, browser session, and integration configuration."
-      loading={loading}
-      blocking={loading}
+      loading={tenantLoading || listLoading}
+      blocking={actionLoading}
       blockingLabel="Working…"
     >
+      {tenantError ? <p className="alert alert--error">{tenantError}</p> : null}
       {error ? <p className="alert alert--error">{error}</p> : null}
+
+      {needsBootstrap ? (
+        <p className="alert alert--info" style={{ marginBottom: "1rem" }}>
+          API auth is on and no key is saved yet. Generate your first key below (no existing key
+          required), then click <strong>Save for this browser</strong> if needed and reload.
+        </p>
+      ) : null}
 
       <section className="panel" style={{ marginBottom: "1.5rem" }}>
         <h2 className="panel__title">Browser API key</h2>
@@ -176,13 +258,52 @@ export function SettingsClient(): React.ReactElement {
             aria-label="API key"
           />
         </div>
-        <button type="button" className="btn btn--secondary" onClick={saveBrowserKey}>
-          Save for this browser
-        </button>
+        <div className="btn-group">
+          <button
+            type="button"
+            className="btn btn--secondary"
+            disabled={actionLoading}
+            onClick={saveBrowserKey}
+          >
+            Save for this browser
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            disabled={actionLoading}
+            onClick={clearSavedBrowserKey}
+          >
+            Clear saved key
+          </button>
+        </div>
+        <p className="panel__desc" style={{ marginTop: "0.75rem" }}>
+          Stuck on &quot;Invalid or inactive API key&quot;? In the project folder run{" "}
+          <code>pnpm auth:reset-keys</code>, copy the printed <code>recon_…</code> value, paste
+          above, and Save.
+        </p>
       </section>
 
       <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
         <h2 className="panel__title">Create tenant API key</h2>
+        {!tenantId ? (
+          <div className="form-field" style={{ marginBottom: "0.75rem" }}>
+            <label className="form-label" htmlFor="bootstrap-tenant">
+              Tenant
+            </label>
+            <select
+              id="bootstrap-tenant"
+              className="input"
+              value={bootstrapSlug}
+              onChange={(e) => setBootstrapSlug(e.target.value)}
+            >
+              {bootstrapSlugs.map((slug) => (
+                <option key={slug} value={slug}>
+                  {slug}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div className="form-row">
           <div className="form-field">
             <label className="form-label" htmlFor="key-name">
@@ -195,10 +316,20 @@ export function SettingsClient(): React.ReactElement {
               onChange={(e) => setNewKeyName(e.target.value)}
             />
           </div>
-          <button type="button" className="btn btn--primary" disabled={loading} onClick={() => void createKey()}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={!canGenerateKey}
+            onClick={() => void createKey()}
+          >
             Generate key
           </button>
         </div>
+        {!canGenerateKey ? (
+          <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
+            Waiting for tenant context…
+          </p>
+        ) : null}
         {createdRawKey ? (
           <p className="alert alert--warning" style={{ marginTop: "0.75rem" }}>
             Copy now — shown once: <code>{createdRawKey}</code>
@@ -219,8 +350,8 @@ export function SettingsClient(): React.ReactElement {
         <h2 className="panel__title">Webhook signing secrets</h2>
         <p className="panel__desc">
           HMAC-signed ingest at{" "}
-          <code>POST /api/webhooks/transactions?tenant_slug=…</code>. See{" "}
-          <code>docs/webhook-ingest.md</code>.
+          <code>POST /api/webhooks/transactions?tenant_slug=…</code>. Requires a saved API key when
+          auth is enabled.
         </p>
         <div className="form-row">
           <div className="form-field">
@@ -232,12 +363,13 @@ export function SettingsClient(): React.ReactElement {
               className="input"
               value={newWebhookName}
               onChange={(e) => setNewWebhookName(e.target.value)}
+              disabled={!tenantId}
             />
           </div>
           <button
             type="button"
             className="btn btn--primary"
-            disabled={loading}
+            disabled={!tenantId || actionLoading}
             onClick={() => void createWebhookSecret()}
           >
             Generate webhook secret

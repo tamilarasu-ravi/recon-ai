@@ -11,6 +11,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { apiFetch } from "@/lib/ui/api-fetch";
+
 const STORAGE_KEY = "recon-tenant-id";
 
 /**
@@ -46,6 +48,8 @@ interface TenantContextValue {
   setTenantId: (id: string) => void;
   loading: boolean;
   error: string | null;
+  /** Reloads tenant list after API key is saved (e.g. from Settings). */
+  reloadTenants: () => Promise<void>;
 }
 
 const TenantContext = createContext<TenantContextValue | null>(null);
@@ -64,40 +68,35 @@ export function TenantProvider({ children }: { children: ReactNode }): React.Rea
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadTenants(): Promise<void> {
-      try {
-        const response = await fetch("/api/tenants");
-        if (!response.ok) {
-          throw new Error(`Failed to load tenants (${response.status})`);
-        }
-        const data = (await response.json()) as { tenants: TenantOption[] };
-        if (cancelled) return;
-
-        setTenants(data.tenants);
-        const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-        const defaultTenant =
-          data.tenants.find((t) => t.slug === "tenant-a") ?? data.tenants[0];
-        const initial =
-          stored && data.tenants.some((t) => t.id === stored) ? stored : defaultTenant?.id ?? null;
-        setTenantIdState(initial);
-        setError(null);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load tenants");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+  const loadTenants = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const response = await apiFetch("/api/tenants");
+      if (!response.ok) {
+        const body = (await response.json()) as { error?: string };
+        throw new Error(body.error ?? `Failed to load tenants (${response.status})`);
       }
-    }
+      const data = (await response.json()) as { tenants: TenantOption[] };
 
-    void loadTenants();
-    return () => {
-      cancelled = true;
-    };
+      setTenants(data.tenants);
+      const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+      const defaultTenant = data.tenants.find((t) => t.slug === "tenant-a") ?? data.tenants[0];
+      const initial =
+        stored && data.tenants.some((t) => t.id === stored) ? stored : defaultTenant?.id ?? null;
+      setTenantIdState(initial);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load tenants");
+      setTenants([]);
+      setTenantIdState(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadTenants();
+  }, [loadTenants]);
 
   const setTenantId = useCallback(
     (id: string) => {
@@ -115,8 +114,8 @@ export function TenantProvider({ children }: { children: ReactNode }): React.Rea
   );
 
   const value = useMemo(
-    () => ({ tenants, tenantId, setTenantId, loading, error }),
-    [tenants, tenantId, setTenantId, loading, error],
+    () => ({ tenants, tenantId, setTenantId, loading, error, reloadTenants: loadTenants }),
+    [tenants, tenantId, setTenantId, loading, error, loadTenants],
   );
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;

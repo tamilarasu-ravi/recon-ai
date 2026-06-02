@@ -44,7 +44,9 @@ async function main(): Promise<void> {
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`\n✅ All automated checks passed (${elapsed}s)`);
-  console.log("Next: docker compose up -d && pnpm db:seed && pnpm demo");
+  console.log("Next: pnpm showcase:prep  (includes eval-results doc sync)");
+  console.log("     docker compose up -d && pnpm db:seed && pnpm demo");
+  console.log("     docs/capstone/showcase-checklist.md");
   console.log("UI:  pnpm dev → http://localhost:3000/review-queue");
 }
 

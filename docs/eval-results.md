@@ -7,15 +7,35 @@
 
 ## Summary (latest run)
 
+<!-- EVAL_SUMMARY:auto -->
+
+_Updated from `eval/results/tagging-latest.json` — do not edit by hand._
+
 | Metric | Value | Target |
 |--------|-------|--------|
-| Pass rate | **100%** (30/30) | ≥ 70% |
-| Auto-tag precision | **100%** | ≥ 95% |
-| Review rate | 40.0% | — |
-| Refusal rate | 13.3% | — |
+| Pass rate | **86.7%** (26/30) | ≥ 70% |
+| Auto-tag precision | **100.0%** | ≥ 95% |
+| Review rate | 30.0% | — |
+| Refusal rate | 20.0% | — |
+| Retrieval proxy (non-REFUSE) | 80.0% | — |
 | LLM calls saved by rules (proxy) | 3 | — |
 
-**Mode:** `LLM_ENABLE_LIVE_CALLS=false` (deterministic fixtures). Re-run with live calls before showcase if API keys are configured.
+Aggregate cost **$0.0016** · **7386** tokens (live LLM).
+
+Eval set: `tagging-v1` · AUTO threshold **0.92**.
+
+**Failures:** 4 — see `tagging-latest.json`.
+
+<!-- /EVAL_SUMMARY:auto -->
+
+Re-run before showcase:
+
+```bash
+pnpm eval:tagging
+tsx scripts/update-eval-results-doc.ts
+```
+
+Or use `pnpm showcase:prep` (eval + doc sync + build). For deterministic CI: `LLM_ENABLE_LIVE_CALLS=false pnpm eval:tagging`.
 
 Thresholds: `TAG_AUTO_THRESHOLD=0.92`, `TAG_REVIEW_THRESHOLD=0.75`.
 

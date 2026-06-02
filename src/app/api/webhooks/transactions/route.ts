@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { assertWebhookRateLimit } from "@/lib/api/apply-rate-limit";
+import { toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { verifyWebhookSignatureForTenant } from "@/lib/auth/webhook-secrets-admin";
 import { getDb } from "@/lib/db/client";
 import { resolveTenantIdBySlug } from "@/lib/integrations/webhooks/resolve-tenant";
@@ -33,6 +35,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!tenantSlug) {
       return NextResponse.json({ error: "tenant_slug query parameter is required" }, { status: 400 });
     }
+
+    assertWebhookRateLimit(request, tenantSlug);
 
     const rawBody = await request.text();
     const signatureHeader = request.headers.get(webhookSignatureHeaderName());
@@ -88,8 +92,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Webhook ingest failed";
-    const status = message.includes("signature") ? 401 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return toRouteErrorResponse(error, "Webhook ingest failed");
   }
 }

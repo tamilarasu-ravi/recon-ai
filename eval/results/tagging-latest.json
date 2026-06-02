@@ -2,16 +2,48 @@
   "eval_set_version": "tagging-v1",
   "eval_set_hash": "a436b76e57c48b67",
   "case_count": 30,
-  "pass_rate": 1,
+  "pass_rate": 0.8667,
   "auto_tag_precision": 1,
-  "review_rate": 0.4,
-  "refusal_rate": 0.1333,
-  "retrieval_proxy_rate": 0.8667,
+  "review_rate": 0.3,
+  "refusal_rate": 0.2,
+  "retrieval_proxy_rate": 0.8,
   "llm_calls_saved_by_rules": 3,
-  "total_cost_usd": 0,
+  "total_cost_usd": 0.001551,
+  "total_prompt_tokens": 6404,
+  "total_completion_tokens": 982,
+  "total_tokens": 7386,
   "llm_enable_live_calls": true,
   "threshold_auto": 0.92,
-  "failures": [],
+  "failures": [
+    {
+      "id": "case-14",
+      "expected_decision": "REFUSE",
+      "actual_decision": "AUTO_TAG",
+      "passed": false,
+      "actual_gl_code": "5400"
+    },
+    {
+      "id": "case-20",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6400"
+    },
+    {
+      "id": "case-22",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6400"
+    },
+    {
+      "id": "case-29",
+      "expected_decision": "QUEUE_REVIEW",
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6200"
+    }
+  ],
   "results": [
     {
       "id": "case-01",
@@ -115,9 +147,9 @@
     {
       "id": "case-14",
       "expected_decision": "REFUSE",
-      "actual_decision": "REFUSE",
-      "passed": true,
-      "actual_gl_code": "5200"
+      "actual_decision": "AUTO_TAG",
+      "passed": false,
+      "actual_gl_code": "5400"
     },
     {
       "id": "case-15",
@@ -147,7 +179,7 @@
       "expected_decision": "QUEUE_REVIEW",
       "actual_decision": "QUEUE_REVIEW",
       "passed": true,
-      "actual_gl_code": "6200"
+      "actual_gl_code": "6100"
     },
     {
       "id": "case-19",
@@ -159,8 +191,8 @@
     {
       "id": "case-20",
       "expected_decision": "QUEUE_REVIEW",
-      "actual_decision": "QUEUE_REVIEW",
-      "passed": true,
+      "actual_decision": "REFUSE",
+      "passed": false,
       "actual_gl_code": "6400"
     },
     {
@@ -173,8 +205,8 @@
     {
       "id": "case-22",
       "expected_decision": "QUEUE_REVIEW",
-      "actual_decision": "QUEUE_REVIEW",
-      "passed": true,
+      "actual_decision": "REFUSE",
+      "passed": false,
       "actual_gl_code": "6400"
     },
     {
@@ -228,9 +260,9 @@
     {
       "id": "case-29",
       "expected_decision": "QUEUE_REVIEW",
-      "actual_decision": "QUEUE_REVIEW",
-      "passed": true,
-      "actual_gl_code": "6100"
+      "actual_decision": "REFUSE",
+      "passed": false,
+      "actual_gl_code": "6200"
     },
     {
       "id": "case-30",

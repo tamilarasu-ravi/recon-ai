@@ -44,12 +44,14 @@ Agents return **structured decisions**; only the orchestrator mutates workflow s
 
 ## Tracks of work
 
-Detailed phases: [`docs/product-roadmap.md`](./docs/product-roadmap.md).
+**Production build order:** [`docs/production-roadmap.md`](./docs/production-roadmap.md) (P1–P5).  
+Feature inventory: [`docs/product-roadmap.md`](./docs/product-roadmap.md).
 
-1. **Platform core** — orchestrator, schema, audit, MCP, evals (largely done).
-2. **Operator experience** — review UI, loading/UX, policy admin, AP inbox (in progress).
-3. **Integrations** — QuickBooks/Xero adapters, webhooks, idempotent ingest at scale.
-4. **Enterprise** — auth, RLS, async workers, observability SLOs, multi-region.
+1. **P1 Deploy & CI** — Done.
+2. **P2 Security** — Done — [`docs/security.md`](./docs/security.md).
+3. **P3 Async ops** — `processing_status` worker, 202 ingest, bulk import.
+4. **P4 Integrations** — real ERP OAuth, receipt chase, NL policy compiler, AP depth.
+5. **P5 Enterprise** — SSO, RLS, observability SLOs, Playwright, eval gate on PR.
 
 ## Non-negotiables (all phases)
 
