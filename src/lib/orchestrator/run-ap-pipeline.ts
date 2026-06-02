@@ -1,11 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import { findDuplicateInvoice } from "@/lib/agents/ap/duplicate";
-import { recommendApPayment } from "@/lib/agents/ap/recommend";
-import { appendAuditLog, appendEvent } from "@/lib/audit/writers";
 import { newRunId } from "@/lib/config/env";
 import type { DbClient } from "@/lib/db/client";
-import { apRecommendations, invoices, tenants } from "@/lib/db/schema";
+import { tenants } from "@/lib/db/schema";
+import { invokeApGraph } from "@/lib/orchestrator/langgraph/ap-graph";
 
 export interface InvoiceReceivedInput {
   tenantId: string;
@@ -28,7 +26,7 @@ export interface ApPipelineResult {
 }
 
 /**
- * Ingests an invoice and runs recommend-only AP (duplicate check + pay-date stub).
+ * Ingests an invoice and runs recommend-only AP via LangGraph (duplicate check + pay-date stub).
  *
  * @param db - Database client.
  * @param input - Invoice ingest payload.
@@ -41,120 +39,43 @@ export async function runApPipeline(
   const runId = newRunId();
   const invoiceDateIso = new Date(input.invoiceDate).toISOString();
 
-  const duplicate = await findDuplicateInvoice(db, {
+  const graphState = await invokeApGraph(db, {
+    runId,
     tenantId: input.tenantId,
+    externalInvoiceId: input.externalInvoiceId,
     vendorRaw: input.vendorRaw,
     amount: input.amount,
+    currency: input.currency,
     invoiceDateIso,
   });
 
-  if (duplicate) {
-    await appendEvent(db, {
-      tenantId: input.tenantId,
-      eventType: "InvoiceDuplicateRefused",
-      runId,
-      payload: {
-        external_invoice_id: input.externalInvoiceId,
-        duplicate_of: duplicate.externalInvoiceId,
-      },
-    });
-
-    await appendAuditLog(db, {
-      tenantId: input.tenantId,
-      runId,
-      agent: "ap",
-      observability: {
-        status: "duplicate_refused",
-        external_invoice_id: input.externalInvoiceId,
-        duplicate_of: duplicate.externalInvoiceId,
-        would_execute_payment: false,
-      },
-    });
+  if (graphState.status === "duplicate") {
+    if (!graphState.duplicateInvoiceId || !graphState.duplicateExternalId) {
+      throw new Error("LangGraph AP duplicate path missing invoice metadata");
+    }
 
     return {
       runId,
-      invoiceId: duplicate.id,
+      invoiceId: graphState.duplicateInvoiceId,
       status: "duplicate",
       recommendationStatus: "duplicate_refused",
-      duplicateOfExternalId: duplicate.externalInvoiceId,
+      duplicateOfExternalId: graphState.duplicateExternalId,
       rationale: "Duplicate invoice (vendor + amount + date).",
     };
   }
 
-  const [invoice] = await db
-    .insert(invoices)
-    .values({
-      tenantId: input.tenantId,
-      externalInvoiceId: input.externalInvoiceId,
-      vendorRaw: input.vendorRaw,
-      amount: input.amount,
-      currency: input.currency,
-      invoiceDate: new Date(input.invoiceDate),
-    })
-    .returning({ id: invoices.id });
-
-  await appendEvent(db, {
-    tenantId: input.tenantId,
-    eventType: "InvoiceReceived",
-    runId,
-    payload: {
-      invoice_id: invoice.id,
-      external_invoice_id: input.externalInvoiceId,
-      vendor_raw: input.vendorRaw,
-      amount: input.amount,
-    },
-  });
-
-  const recommendation = recommendApPayment({
-    amount: input.amount,
-    currency: input.currency,
-    invoiceDateIso,
-    isDuplicate: false,
-  });
-
-  await db.insert(apRecommendations).values({
-    tenantId: input.tenantId,
-    invoiceId: invoice.id,
-    recommendedPayDate: new Date(recommendation.recommendedPayDateIso),
-    fundingSource: recommendation.fundingSource,
-    rationale: recommendation.rationale,
-    runId,
-  });
-
-  await appendEvent(db, {
-    tenantId: input.tenantId,
-    eventType: "ApRecommended",
-    runId,
-    payload: {
-      invoice_id: invoice.id,
-      recommended_pay_date: recommendation.recommendedPayDateIso,
-      funding_source: recommendation.fundingSource,
-      would_execute_payment: false,
-    },
-  });
-
-  await appendAuditLog(db, {
-    tenantId: input.tenantId,
-    runId,
-    agent: "ap",
-    invoiceId: invoice.id,
-    observability: {
-      status: recommendation.status,
-      recommended_pay_date: recommendation.recommendedPayDateIso,
-      funding_source: recommendation.fundingSource,
-      rationale: recommendation.rationale,
-      would_execute_payment: false,
-    },
-  });
+  if (!graphState.invoiceId || !graphState.recommendation) {
+    throw new Error("LangGraph AP accept path missing recommendation");
+  }
 
   return {
     runId,
-    invoiceId: invoice.id,
+    invoiceId: graphState.invoiceId,
     status: "accepted",
-    recommendationStatus: recommendation.status,
-    recommendedPayDate: recommendation.recommendedPayDateIso,
-    fundingSource: recommendation.fundingSource,
-    rationale: recommendation.rationale,
+    recommendationStatus: graphState.recommendation.status,
+    recommendedPayDate: graphState.recommendation.recommendedPayDateIso,
+    fundingSource: graphState.recommendation.fundingSource,
+    rationale: graphState.recommendation.rationale,
   };
 }
 

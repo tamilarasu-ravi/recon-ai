@@ -8,8 +8,11 @@ import {
 } from "@/lib/agents/tagging/embed-transaction";
 import { seedMockInvoicesForTenant } from "@/lib/agents/ap/seed-invoices";
 import { seedTenantPolicyPack } from "@/lib/agents/policy/seed-policies";
+import { seedApiKeyForTenant } from "@/lib/auth/seed-api-keys";
+import { seedWebhookSecretForTenant } from "@/lib/auth/seed-webhook-secrets";
 import { hasProviderApiKey, loadEnv } from "@/lib/config/env";
 import { createDb } from "@/lib/db/client";
+import { runCliScript } from "./lib/close-cli-resources.js";
 import {
   chartOfAccounts,
   transactionEmbeddings,
@@ -230,15 +233,24 @@ async function main(): Promise<void> {
 
     const policyPack = await seedTenantPolicyPack(db, tenantId);
     const invoiceCount = await seedMockInvoicesForTenant(db, tenantSeed.slug);
+    const apiKey = await seedApiKeyForTenant(db, tenantSeed.slug);
+    const webhookSecret = await seedWebhookSecretForTenant(db, tenantSeed.slug);
+    const apiKeyNote = apiKey ? ` API key ${apiKey.keyPrefix}…` : "";
+    const webhookNote = webhookSecret ? ` webhook ${webhookSecret.secretPrefix}…` : "";
+
     console.log(
-      `Seeded ${tenantSeed.slug}: CoA, vendors, rules, ${tenantSeed.labeledTxns.length} labeled txns, policy ${policyPack.policyVersion}, ${invoiceCount} invoices`,
+      `Seeded ${tenantSeed.slug}: CoA, vendors, rules, ${tenantSeed.labeledTxns.length} labeled txns, policy ${policyPack.policyVersion}, ${invoiceCount} invoices${apiKeyNote}${webhookNote}`,
     );
+
+    if (apiKey) {
+      console.log(`  → ${tenantSeed.slug} API key (store securely): ${apiKey.rawKey}`);
+    }
+    if (webhookSecret) {
+      console.log(`  → ${tenantSeed.slug} webhook secret (store securely): ${webhookSecret.rawSecret}`);
+    }
   }
 
   console.log("Seed complete.");
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+runCliScript(main);

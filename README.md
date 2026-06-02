@@ -1,31 +1,25 @@
-# AI-Native CFO Operations Platform (Capstone)
+# ReconAI — Financial Operations Platform
 
-|                  |                                                                    |
-| ---------------- | ------------------------------------------------------------------ |
-| **Course**       | AI Engineering — Capstone                                          |
-| **Author**       | _Your Name_ (`your.email@example.com`)                             |
-| **Institution**  | _Your program / university_                                        |
-| **Timeline**     | Build **May 28 – Jun 10** · Buffer **Jun 11–13** · **Demo Jun 14** |
-| **Status**       | Feature-complete (freeze Jun 10) · showcase Jun 14                |
-| **Last updated** | June 1, 2026                                                       |
-| **Code freeze**  | **June 10, 2026**                                                  |
-| **Showcase**     | **June 14, 2026**                                                  |
+**ReconAI** is an event-driven CFO operations platform: a deterministic **orchestrator** runs policy, close tagging, and payables workflows; specialized **agents** return structured decisions; Postgres + pgvector is the system of record.
 
-> Replace placeholders in the table above before submission.
+| | |
+| --- | --- |
+| **Version** | 0.1 — platform core shipped |
+| **Status** | Phase 1 (operator product) — see [product roadmap](./docs/product-roadmap.md) |
+| **Strategy** | [STRATEGY.md](./STRATEGY.md) |
+| **System design** | [docs/architecture.md](./docs/architecture.md) |
 
-**Thesis:** A single CFO event platform orchestrates policy, close tagging, and payables agents; in this capstone I implement transaction auto-tagging with confidence-gated posting and accountant-driven per-tenant vendor rules, with policy and AP integrated as gated downstream stages.
+**Not a chatbot.** Tri-state autonomy (`AUTO_TAG` · `QUEUE_REVIEW` · `REFUSE`), rule-first cost control, full audit trails, MCP/API parity with the UI.
 
-**Positioning:** Event-driven financial operations platform with AI-assisted decisioning — not a generic “LLM finance assistant.”
+**Quick links:** [Product roadmap](./docs/product-roadmap.md) · [Architecture](./docs/architecture.md) · [Orchestrator walkthrough](./docs/guides/orchestrator-walkthrough.md) · [Webhook ingest](./docs/webhook-ingest.md) · [Orchestrator](#orchestrator-explicit) · [Bootstrap](#bootstrap-after-scaffold-exists) · [MCP](./docs/mcp-setup.md) · [Hero spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Production at scale](./docs/production-at-scale.md) · [Capstone artifacts](./docs/capstone/README.md) (academic timeline, June 2026)
 
-**Shape:** one platform + hero tagging + policy/AP stubs by **Jun 10** (not three production-grade agents).
-
-Reviewers care more about **clear boundaries**, **evals**, and **“don’t know” behavior** than feature count.
-
-**Quick links:** [Implementation plansheet](./docs/plansheet.md) · [SME agent (separate repo)](../capstone-sme-agent) · [What we're building (beginners)](./docs/what-we-are-building.md) · [Production at scale (interview)](./docs/production-at-scale.md) · [Schedule to Jun 14](#timeline-demo-june-14-2026) · [Day-by-day](./docs/schedule.md) · [Planning phases](./capstone-poc-planner/SKILL.md) · [Unified capstone](#unified-capstone-three-workflows-one-platform) · [Orchestrator](#orchestrator-explicit) · [MCP](#mcp-agent-native-boundary) · [Tech stack](#tech-stack-recommended) · [Tech stack planning](./docs/tech-stack.md) · [Hero build spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Project pitch (PDF)](./PITCH-cfo-operations-platform.pdf) · [Eval plan](#eval-plan) · [Repo layout](#repository-layout)
-
-**Source brief:** _CFO Agent_ (Workflows 1–3). This repo implements all three as **one platform** with depth weighted toward Workflow 1.
+**Source brief:** _CFO Agent_ workflows 1–3 — implemented as **one platform** with production depth on tagging and gated stages on policy/AP.
 
 ---
+
+## Capstone timeline (June 2026 — historical)
+
+> Academic schedule, showcase, and submission checklist: **[docs/capstone/README.md](./docs/capstone/README.md)**. Ongoing product work follows **[STRATEGY.md](./STRATEGY.md)**.
 
 ## Timeline — demo June 14, 2026
 
@@ -86,7 +80,7 @@ You have **~14 calendar days** to build (May 28 → Jun 10). Plan for the **3-we
 
 ---
 
-## Unified capstone: three workflows, one platform
+## Platform workflows (three CFO loops, one spine)
 
 ### The combined problem
 
@@ -741,13 +735,14 @@ Rehearsed path — no live improvisation.
 - [x] One **deep** workflow — tagging with cold start + override learning (`pnpm demo` steps 4–6)
 - [x] Cross-workflow hook — policy gate before auto-tag (receipt blocks `AUTO_TAG`)
 - [x] **“Don’t know”** — `REFUSE` on unknown vendor (`pnpm demo` step 9; eval cases 06–07, 14–15)
-- [x] Evals — 30 JSONL cases; [eval-results.md](./docs/eval-results.md) (100% pass, 100% auto-tag precision)
+- [x] Evals — 30 JSONL cases; **`eval/results/tagging-latest.json`** (100% pass, 100% auto-tag precision)
 - [x] Architecture write-up — [architecture.md](./docs/architecture.md) (orchestrator vs agents, implement-now vs defer)
 - [x] Eval tables: tagging; policy + AP covered in E2E demo (AP duplicate; forecast stub only)
 - [x] **“Production next”** section below + [production-at-scale.md](./docs/production-at-scale.md)
-- [x] Demo script + deck — [demo-script.md](./docs/demo-script.md), [showcase-deck.md](./docs/showcase-deck.md)
+- [x] Demo script — see **Showcase** section below (`pnpm demo`, 9 steps)
 - [ ] **Author** name/email in header table (required before submission)
-- [ ] Git tag **`v0.1.0-demo`** after final commit — see [code-freeze.md](./docs/code-freeze.md)
+- [ ] Git tag **`v0.1.0-demo`**: `git tag -a v0.1.0-demo -m "Capstone demo freeze"`
+- [ ] Push: `git push origin main --tags`
 
 ---
 
@@ -791,8 +786,9 @@ Capstone build implements **scale-ready hooks** (tenant isolation, rule-first co
 ## Repository layout
 
 ```text
-capstone-project/
+recon-ai/
 ├── README.md
+├── STRATEGY.md                 # Product north star (canonical)
 ├── .env.example
 ├── docker-compose.yml          # Postgres 16 + pgvector
 ├── package.json
@@ -802,6 +798,8 @@ capstone-project/
 ├── docs/PITCH-cfo-operations-platform.md  # Pitch source (edit + regenerate PDF)
 ├── capstone-poc-planner/       # Ideation phases (reference)
 ├── docs/
+│   ├── product-roadmap.md      # Phased delivery (Phases 0–4)
+│   ├── capstone/               # Academic / showcase index
 │   ├── what-we-are-building.md # Beginner guide — business problem first
 │   ├── production-at-scale.md  # Scaling, cost, ops — interview prep (design only)
 │   ├── plansheet.md            # Implementation tasks (README + hero spec)
@@ -890,7 +888,24 @@ pnpm dev                        # /review-queue + transaction detail
 
 **Eval proof:** `pnpm eval:tagging` → 30/30 cases in `eval/results/tagging-latest.json`.
 
-Before submission: fill **Author** in the table at the top; tag `v0.1.0-demo` on your freeze commit.
+Before submission: fill **Author** in the table at the top; tag and push (see Deliverables checklist).
+
+---
+
+## Submission checklist (Jun 10–14)
+
+| # | Task | Command / location |
+|---|------|-------------------|
+| 1 | Author + email | README header table |
+| 2 | Automated proof | `pnpm verify` |
+| 3 | E2E proof (DB) | `docker compose up -d && pnpm db:seed && pnpm verify:full` |
+| 4 | Eval artifact | `eval/results/tagging-latest.json` |
+| 5 | Release tag | `git tag -a v0.1.0-demo -m "Capstone demo freeze"` |
+| 6 | Push | `git push origin main --tags` |
+| 7 | Backup video | Record `pnpm demo` + 30s UI (`pnpm dev` → `/review-queue`) |
+| 8 | Live showcase | Local demo primary; slides/deck local if used |
+
+**Grader quickstart:** `docker compose up -d` → `pnpm db:seed` → `pnpm demo` → `pnpm eval:tagging`
 
 ---
 
@@ -934,4 +949,4 @@ Before submission: fill **Author** in the table at the top; tag `v0.1.0-demo` on
 
 ## License
 
-MIT (or your course-required license). Academic use — capstone submission for AI Engineering.
+MIT — see [LICENSE](./LICENSE) if present; otherwise MIT by intent.

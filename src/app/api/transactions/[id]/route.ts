@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { getDb } from "@/lib/db/client";
 import {
   auditLog,
   chartOfAccounts,
   events,
+  receipts,
   reviewQueue,
   transactions,
 } from "@/lib/db/schema";
@@ -26,6 +28,8 @@ export async function GET(
     const { id: transactionId } = await context.params;
     const url = new URL(request.url);
     const parsed = querySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
+    await requireTenantAccess(request, parsed.tenant_id);
+
     const db = getDb();
 
     const txnRows = await db
@@ -42,6 +46,9 @@ export async function GET(
         processingStatus: transactions.processingStatus,
         glAccountId: transactions.glAccountId,
         suggestedGlAccountId: transactions.suggestedGlAccountId,
+        erpProvider: transactions.erpProvider,
+        erpExternalId: transactions.erpExternalId,
+        erpPostedAt: transactions.erpPostedAt,
         createdAt: transactions.createdAt,
         updatedAt: transactions.updatedAt,
       })
@@ -79,23 +86,24 @@ export async function GET(
         and(eq(auditLog.transactionId, transactionId), eq(auditLog.tenantId, parsed.tenant_id)),
       )
       .orderBy(desc(auditLog.createdAt))
-      .limit(10);
+      .limit(20);
 
-    const runIds = auditRows.map((row) => row.runId);
-    const eventRows =
-      runIds.length > 0
-        ? await db
-            .select({
-              eventType: events.eventType,
-              payload: events.payload,
-              runId: events.runId,
-              createdAt: events.createdAt,
-            })
-            .from(events)
-            .where(and(eq(events.tenantId, parsed.tenant_id), inArray(events.runId, runIds)))
-            .orderBy(desc(events.createdAt))
-            .limit(20)
-        : [];
+    const eventRows = await db
+      .select({
+        eventType: events.eventType,
+        payload: events.payload,
+        runId: events.runId,
+        createdAt: events.createdAt,
+      })
+      .from(events)
+      .where(
+        and(
+          eq(events.tenantId, parsed.tenant_id),
+          sql`${events.payload}->>'transaction_id' = ${transactionId}`,
+        ),
+      )
+      .orderBy(desc(events.createdAt))
+      .limit(40);
 
     const reviewRows = await db
       .select({
@@ -112,23 +120,50 @@ export async function GET(
       .orderBy(desc(reviewQueue.createdAt))
       .limit(5);
 
+    const receiptRows = await db
+      .select({
+        clearedAt: receipts.clearedAt,
+        receiptText: receipts.receiptText,
+      })
+      .from(receipts)
+      .where(
+        and(eq(receipts.transactionId, transactionId), eq(receipts.tenantId, parsed.tenant_id)),
+      )
+      .limit(1);
+
+    const receipt = receiptRows[0] ?? null;
+
     const suggestedGl = txn.suggestedGlAccountId
       ? glById.get(txn.suggestedGlAccountId)
       : undefined;
     const postedGl = txn.glAccountId ? glById.get(txn.glAccountId) : undefined;
+
+    const pendingEvent = eventRows.find((event) => event.eventType === "AutoTagPendingApproval");
 
     return NextResponse.json({
       transaction: {
         ...txn,
         suggested_gl: suggestedGl ?? null,
         posted_gl: postedGl ?? null,
+        erp_posted_at:
+          txn.erpPostedAt instanceof Date
+            ? txn.erpPostedAt.toISOString()
+            : txn.erpPostedAt
+              ? new Date(String(txn.erpPostedAt)).toISOString()
+              : null,
       },
       review_queue: reviewRows,
+      receipt,
       audit_trail: auditRows,
       events: eventRows,
+      pending_auto_tag: pendingEvent
+        ? {
+            run_id: pendingEvent.runId,
+            payload: pendingEvent.payload,
+          }
+        : null,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Transaction fetch failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return toRouteErrorResponse(error, "Transaction fetch failed");
   }
 }

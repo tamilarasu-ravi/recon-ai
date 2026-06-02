@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { getDb } from "@/lib/db/client";
 import { receipts, transactions } from "@/lib/db/schema";
 
@@ -18,6 +19,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
     const parsed = receiptUploadSchema.parse(body);
+    await requireTenantAccess(request, parsed.tenant_id);
+
     const db = getDb();
 
     const txnRows = await db
@@ -68,7 +71,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       cleared_at: clearedAt.toISOString(),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Receipt upload failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return toRouteErrorResponse(error, "Receipt upload failed");
   }
 }

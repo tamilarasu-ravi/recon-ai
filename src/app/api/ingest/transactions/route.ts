@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { getDb } from "@/lib/db/client";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 
@@ -26,6 +27,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
     const parsed = ingestSchema.parse(body);
+    await requireTenantAccess(request, parsed.tenant_id);
+
     const db = getDb();
 
     const result = await runTaggingPipeline(db, {
@@ -39,9 +42,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       mcc: parsed.mcc,
     });
 
-    return NextResponse.json(result, { status: result.status === "duplicate" ? 200 : 201 });
+    return NextResponse.json(result, {
+      status:
+        result.status === "duplicate"
+          ? 200
+          : result.status === "pending_approval"
+            ? 202
+            : 201,
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Ingest failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return toRouteErrorResponse(error, "Ingest failed");
   }
 }

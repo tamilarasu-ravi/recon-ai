@@ -4,6 +4,7 @@ const REASON_LABELS: Record<string, string> = {
   policy_flag_review: "Policy review",
   prompt_injection_guard: "Safety — prompt injection",
   new_vendor_cold_start: "New vendor (cold start)",
+  llm_parse_failed: "LLM parse failed",
   llm_unavailable: "LLM unavailable",
   low_confidence: "Low confidence",
   refuse_low_similarity: "Low similarity — refused",

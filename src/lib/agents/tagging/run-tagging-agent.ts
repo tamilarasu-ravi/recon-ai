@@ -21,6 +21,7 @@ import {
   isReviewOnlyGlCode,
 } from "@/lib/orchestrator/safety";
 import { createLlmClient } from "@/lib/llm/client";
+import { TAGGING_PROMPT_VERSION } from "@/lib/llm/prompts/tagging";
 
 export interface TaggingAgentInput {
   tenantId: string;
@@ -190,7 +191,12 @@ export async function runTaggingAgent(
     detail: {
       llm_skipped: suggestResult.llmSkipped,
       llm_skipped_reason: suggestResult.llmSkippedReason,
-      cost_usd: suggestResult.llmMeta?.costUsd,
+      cost_usd: suggestResult.llmMeta?.costUsd ?? 0,
+      prompt_tokens: suggestResult.llmMeta?.promptTokens ?? 0,
+      completion_tokens: suggestResult.llmMeta?.completionTokens ?? 0,
+      model: suggestResult.llmMeta?.model,
+      prompt_version: suggestResult.llmSkipped ? undefined : TAGGING_PROMPT_VERSION,
+      error_message: suggestResult.errorMessage,
     },
   });
 
@@ -230,6 +236,12 @@ export async function runTaggingAgent(
     unknownVendorSignal: hasUnknownVendorSignal(input.vendorRaw),
     env,
   });
+
+  if (parseFailed && suggestResult.errorMessage?.includes("no longer available")) {
+    gateResult = { decision: "QUEUE_REVIEW", reason: "llm_unavailable" };
+  } else if (parseFailed && suggestResult.errorMessage?.startsWith("[GoogleGenerativeAI Error]")) {
+    gateResult = { decision: "QUEUE_REVIEW", reason: "llm_unavailable" };
+  }
 
   if (
     vendorResult.isNewVendor &&

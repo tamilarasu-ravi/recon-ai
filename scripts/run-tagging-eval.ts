@@ -5,8 +5,10 @@ import { config as loadDotenv } from "dotenv";
 import { and, eq, like, not } from "drizzle-orm";
 import { loadEnv } from "@/lib/config/env";
 import { createDb } from "@/lib/db/client";
+import { closeCliResources, runCliScript } from "./lib/close-cli-resources.js";
 import type { DbClient } from "@/lib/db/client";
-import { chartOfAccounts, tenants, transactions, vendorRules, vendors } from "@/lib/db/schema";
+import { auditLog, chartOfAccounts, tenants, transactions, vendorRules, vendors } from "@/lib/db/schema";
+import { parseLlmUsageFromObservability } from "@/lib/observability/llm-cost";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
 
@@ -140,8 +142,16 @@ async function main(): Promise<void> {
   let autoTagCorrect = 0;
   let llmCallsSavedByRules = 0;
   let retrievalHits = 0;
+  let totalCostUsd = 0;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
 
-  for (const evalCase of cases) {
+  console.log(
+    `Running ${cases.length} eval case(s) (live LLM=${env.LLM_ENABLE_LIVE_CALLS}) — this may take a few minutes…`,
+  );
+
+  for (let caseIndex = 0; caseIndex < cases.length; caseIndex += 1) {
+    const evalCase = cases[caseIndex]!;
     const tenantId = tenantBySlug.get(evalCase.tenant_slug);
     if (!tenantId) {
       throw new Error(`Unknown tenant_slug in eval case ${evalCase.id}: ${evalCase.tenant_slug}`);
@@ -149,6 +159,10 @@ async function main(): Promise<void> {
 
     const externalId = `eval-${evalCase.id}`;
     const timestamp = "2026-01-01T00:00:00.000Z";
+    process.stdout.write(
+      `  [${caseIndex + 1}/${cases.length}] ${evalCase.id} … `,
+    );
+
     const pipelineResult = await runTaggingPipeline(
       db,
       {
@@ -160,7 +174,7 @@ async function main(): Promise<void> {
         vendorRaw: evalCase.vendor_raw,
         memo: evalCase.memo,
       },
-      { skipPolicy: true },
+      { skipPolicy: true, skipHitl: true },
     );
 
     const actualDecision = pipelineResult.decision ?? "REFUSE";
@@ -190,6 +204,21 @@ async function main(): Promise<void> {
       retrievalHits += 1;
     }
 
+    const [taggingAudit] = await db
+      .select({ observability: auditLog.observability })
+      .from(auditLog)
+      .where(and(eq(auditLog.runId, pipelineResult.runId), eq(auditLog.agent, "tagging")))
+      .limit(1);
+
+    if (taggingAudit?.observability && typeof taggingAudit.observability === "object") {
+      const usage = parseLlmUsageFromObservability(
+        taggingAudit.observability as Record<string, unknown>,
+      );
+      totalCostUsd += usage.costUsd;
+      totalPromptTokens += usage.promptTokens;
+      totalCompletionTokens += usage.completionTokens;
+    }
+
     results.push({
       id: evalCase.id,
       expected_decision: evalCase.expected_decision,
@@ -199,6 +228,11 @@ async function main(): Promise<void> {
       actual_gl_code: actualGlCode,
       notes: evalCase.notes,
     });
+
+    const status = passed ? "pass" : "FAIL";
+    console.log(
+      `${actualDecision}${actualGlCode ? ` → ${actualGlCode}` : ""} (${status}, expected ${evalCase.expected_decision})`,
+    );
   }
 
   const precision = autoTagTotal > 0 ? autoTagCorrect / autoTagTotal : 1;
@@ -218,7 +252,10 @@ async function main(): Promise<void> {
     refusal_rate: Number(refusalRate.toFixed(4)),
     retrieval_proxy_rate: Number((retrievalHits / results.length).toFixed(4)),
     llm_calls_saved_by_rules: llmCallsSavedByRules,
-    total_cost_usd: 0,
+    total_cost_usd: Number(totalCostUsd.toFixed(6)),
+    total_prompt_tokens: totalPromptTokens,
+    total_completion_tokens: totalCompletionTokens,
+    total_tokens: totalPromptTokens + totalCompletionTokens,
     llm_enable_live_calls: env.LLM_ENABLE_LIVE_CALLS,
     threshold_auto: env.TAG_AUTO_THRESHOLD,
     failures: results.filter((row) => !row.passed),
@@ -234,11 +271,14 @@ async function main(): Promise<void> {
   console.log(`  auto_tag_precision: ${(summary.auto_tag_precision * 100).toFixed(1)}%`);
   console.log(`  review_rate: ${(summary.review_rate * 100).toFixed(1)}%`);
   console.log(`  refusal_rate: ${(summary.refusal_rate * 100).toFixed(1)}%`);
+  console.log(`  total_cost_usd: ${summary.total_cost_usd}`);
+  console.log(`  total_tokens: ${summary.total_tokens}`);
   console.log(`  results: ${RESULTS_FILE}`);
 
   const redTeam = results.find((row) => row.id === "case-08");
   if (redTeam && redTeam.actual_decision === "AUTO_TAG") {
     console.error("Red-team case-08 incorrectly AUTO_TAG");
+    await closeCliResources();
     process.exit(1);
   }
 
@@ -248,13 +288,9 @@ async function main(): Promise<void> {
 
   if (passRate < 0.7) {
     console.error("Eval pass rate below 70% — investigate failures");
+    await closeCliResources();
     process.exit(1);
   }
-
-  process.exit(0);
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+runCliScript(main);

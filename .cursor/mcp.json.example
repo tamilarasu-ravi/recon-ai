@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "recon-ai": {
+      "command": "pnpm",
+      "args": ["mcp"],
+      "cwd": "/absolute/path/to/recon-ai"
+    }
+  }
+}

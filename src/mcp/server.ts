@@ -8,6 +8,11 @@ import {
   handleGetReviewQueue,
   handleIngestTransaction,
   handleListTenants,
+  handleApproveAutoTag,
+  handleGetActivePolicy,
+  handleIngestInvoice,
+  handleListInvoices,
+  handlePostErp,
   handleReprocessTagging,
   handleSubmitOverride,
   handleUploadReceipt,
@@ -19,7 +24,7 @@ loadDotenv({ path: ".env" });
 
 const server = new McpServer({
   name: "recon-ai-platform",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 const tenantSlugSchema = z.object({
@@ -30,7 +35,7 @@ server.registerTool(
   "list_tenants",
   {
     title: "List tenants",
-    description: "Lists seeded tenants (id, slug, name) for capstone demos.",
+    description: "Lists seeded tenants (id, slug, name).",
   },
   async () => {
     const db = createDb();
@@ -111,6 +116,23 @@ server.registerTool(
 );
 
 server.registerTool(
+  "approve_auto_tag",
+  {
+    title: "Approve AUTO_TAG",
+    description: "Resumes LangGraph HITL interrupt — approve or reject proposed AUTO_TAG.",
+    inputSchema: tenantSlugSchema.extend({
+      transaction_id: z.string().uuid(),
+      run_id: z.string().uuid(),
+      approved: z.boolean(),
+    }),
+  },
+  async (args) => {
+    const db = createDb();
+    return mcpJsonResult(await handleApproveAutoTag(db, args));
+  },
+);
+
+server.registerTool(
   "reprocess_tagging",
   {
     title: "Reprocess tagging",
@@ -123,6 +145,69 @@ server.registerTool(
     const db = createDb();
     return mcpJsonResult(
       await handleReprocessTagging(db, args.tenant_slug, args.transaction_id),
+    );
+  },
+);
+
+server.registerTool(
+  "ingest_invoice",
+  {
+    title: "Ingest invoice",
+    description: "Ingests an AP invoice and runs recommend-only duplicate check + pay-date suggestion.",
+    inputSchema: tenantSlugSchema.extend({
+      external_invoice_id: z.string().min(1).max(128),
+      vendor_raw: z.string().min(1).max(256),
+      amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
+      currency: z.string().length(3).default("USD"),
+      invoice_date: z.string().datetime(),
+    }),
+  },
+  async (args) => {
+    const db = createDb();
+    return mcpJsonResult(await handleIngestInvoice(db, args));
+  },
+);
+
+server.registerTool(
+  "list_invoices",
+  {
+    title: "List invoices",
+    description: "Lists AP invoices and recommendations for a tenant.",
+    inputSchema: tenantSlugSchema,
+  },
+  async (args) => {
+    const db = createDb();
+    return mcpJsonResult(await handleListInvoices(db, args.tenant_slug));
+  },
+);
+
+server.registerTool(
+  "get_active_policy",
+  {
+    title: "Get active policy",
+    description: "Returns the active policy pack and compiled rules for a tenant.",
+    inputSchema: tenantSlugSchema,
+  },
+  async (args) => {
+    const db = createDb();
+    return mcpJsonResult(await handleGetActivePolicy(db, args.tenant_slug));
+  },
+);
+
+server.registerTool(
+  "post_erp",
+  {
+    title: "Post to ERP",
+    description: "Posts an AUTO_TAG transaction to the mock/sandbox ERP adapter.",
+    inputSchema: tenantSlugSchema.extend({
+      transaction_id: z.string().uuid(),
+      gl_account_id: z.string().uuid().optional(),
+    }),
+  },
+  async (args) => {
+    const db = createDb();
+    return mcpJsonResult(
+      await handlePostErp(db, args.tenant_slug, args.transaction_id, args.gl_account_id),
     );
   },
 );

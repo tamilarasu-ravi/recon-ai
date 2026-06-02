@@ -1,0 +1,170 @@
+"use client";
+
+import { GraphStepsTimeline } from "@/app/components/graph-steps-timeline";
+import { DecisionBadge } from "@/app/components/ui/decision-badge";
+import type { TransactionEventRow } from "@/lib/ui/group-transaction-events";
+import { parseObservability } from "@/lib/ui/parse-audit";
+
+export interface TransactionRunAudit {
+  runId: string;
+  agent: string;
+  decision: string | null;
+  confidence: string | null;
+  policyVersion: string | null;
+  observability: unknown;
+  createdAt: string;
+}
+
+interface TransactionRunTraceProps {
+  audit: TransactionRunAudit | null;
+  runEvents: TransactionEventRow[];
+}
+
+/**
+ * Renders orchestrator graph steps and audit metadata for one run_id.
+ *
+ * @param props - Audit row and domain events for the selected run.
+ * @returns Trace panel or fallback when audit is missing.
+ */
+export function TransactionRunTrace({
+  audit,
+  runEvents,
+}: TransactionRunTraceProps): React.ReactElement {
+  const observability = parseObservability(audit?.observability);
+
+  const llmStep = Array.isArray(observability.steps)
+    ? observability.steps.find(
+        (step) =>
+          typeof step === "object" &&
+          step !== null &&
+          "name" in step &&
+          step.name === "llm_tagging",
+      )
+    : undefined;
+  const llmError =
+    llmStep &&
+    typeof llmStep === "object" &&
+    "detail" in llmStep &&
+    llmStep.detail &&
+    typeof llmStep.detail === "object" &&
+    "error_message" in llmStep.detail
+      ? String(llmStep.detail.error_message)
+      : null;
+
+  if (!audit) {
+    return (
+      <div>
+        <p className="panel__desc">No audit trace stored for this run. Domain events:</p>
+        <ul className="api-list">
+          {runEvents.map((event, index) => (
+            <li key={`${event.eventType}-${index}`}>
+              <strong>{event.eventType}</strong>
+              <pre className="code-block code-block--light" style={{ marginTop: "0.5rem" }}>
+                {JSON.stringify(event.payload, null, 2)}
+              </pre>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", margin: "0 0 0.75rem" }}>
+        run_id: <code>{audit.runId}</code> · agent {audit.agent}
+        {audit.policyVersion ? ` · policy ${audit.policyVersion}` : null}
+        {audit.decision ? (
+          <>
+            {" "}
+            · <DecisionBadge decision={audit.decision} />
+          </>
+        ) : null}
+        {audit.confidence ? ` · confidence ${audit.confidence}` : null}
+      </p>
+
+      {observability.llm_skipped ? (
+        <p className="alert alert--info" style={{ marginBottom: "0.75rem" }}>
+          <strong>LLM skipped:</strong> {observability.llm_skipped_reason ?? "rule-first match"}
+        </p>
+      ) : observability.llm_skipped === false ? (
+        <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem" }}>LLM used for tagging suggestion.</p>
+      ) : null}
+
+      {typeof observability.cost_usd === "number" ||
+      typeof observability.prompt_tokens === "number" ? (
+        <div className="stat-grid" style={{ marginBottom: "0.75rem" }}>
+          <div className="stat">
+            <span className="stat__label">Est. cost</span>
+            <span className="stat__value">
+              {(() => {
+                const cost = observability.cost_usd ?? 0;
+                return `$${cost.toFixed(cost < 0.01 ? 4 : 2)}`;
+              })()}
+            </span>
+          </div>
+          <div className="stat">
+            <span className="stat__label">Prompt tokens</span>
+            <span className="stat__value">{observability.prompt_tokens ?? 0}</span>
+          </div>
+          <div className="stat">
+            <span className="stat__label">Completion tokens</span>
+            <span className="stat__value">{observability.completion_tokens ?? 0}</span>
+          </div>
+          {observability.model ? (
+            <div className="stat">
+              <span className="stat__label">Model</span>
+              <span className="stat__value" style={{ fontSize: "0.8125rem" }}>
+                {observability.model}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {llmError ? <p className="alert alert--error">{llmError}</p> : null}
+      {observability.policy_outcome ? (
+        <p style={{ fontSize: "0.875rem", margin: "0.5rem 0" }}>
+          Policy outcome: <strong>{observability.policy_outcome}</strong>
+        </p>
+      ) : null}
+      {observability.receipt_blocked ? (
+        <p className="alert alert--error" style={{ marginTop: "0.5rem" }}>
+          Receipt blocked AUTO_TAG.
+        </p>
+      ) : null}
+      {observability.reason ? (
+        <p style={{ fontSize: "0.875rem", margin: "0.5rem 0" }}>
+          Gate reason: <strong>{observability.reason}</strong>
+        </p>
+      ) : null}
+
+      {Array.isArray(observability.graph_steps) && observability.graph_steps.length > 0 ? (
+        <GraphStepsTimeline steps={observability.graph_steps} />
+      ) : null}
+
+      {runEvents.length > 0 ? (
+        <details className="details-scroll" style={{ marginTop: "1rem" }}>
+          <summary className="details-summary">Domain events ({runEvents.length})</summary>
+          <ul className="api-list" style={{ marginTop: "0.5rem" }}>
+            {runEvents.map((event, index) => (
+              <li key={`${event.eventType}-${index}`}>
+                <strong>{event.eventType}</strong>
+                <pre className="code-block code-block--light" style={{ marginTop: "0.35rem" }}>
+                  {JSON.stringify(event.payload, null, 2)}
+                </pre>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
+      {Array.isArray(observability.steps) && observability.steps.length > 0 ? (
+        <details className="details-scroll" style={{ marginTop: "1rem" }}>
+          <summary className="details-summary">Agent step trace ({observability.steps.length})</summary>
+          <pre className="code-block">{JSON.stringify(observability.steps, null, 2)}</pre>
+        </details>
+      ) : null}
+    </>
+  );
+}

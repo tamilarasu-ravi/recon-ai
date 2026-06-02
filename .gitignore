@@ -9,6 +9,7 @@ dist/
 # Planning / SME docs — local only (not committed)
 docs/*
 .cursor/*
+!.cursor/mcp.json.example
 
 pnpm-lock.yaml
 .pnpm-store/*

@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
+import { listReviewQueuePage } from "@/lib/data/review-queue-list";
 import { getDb } from "@/lib/db/client";
-import { chartOfAccounts, reviewQueue, transactions } from "@/lib/db/schema";
 
 const querySchema = z.object({
   tenant_id: z.string().uuid(),
   status: z.enum(["open", "resolved", "all"]).default("open"),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().min(1).optional(),
 });
 
 /**
- * Lists review queue items for a tenant with transaction and GL context.
+ * Lists review queue items for a tenant with cursor-based pagination.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -20,43 +21,32 @@ export async function GET(request: Request): Promise<NextResponse> {
     const parsed = querySchema.parse({
       tenant_id: url.searchParams.get("tenant_id"),
       status: url.searchParams.get("status") ?? "open",
-      limit: url.searchParams.get("limit") ?? 50,
+      limit: url.searchParams.get("limit") ?? 20,
+      cursor: url.searchParams.get("cursor") ?? undefined,
     });
 
+    await requireTenantAccess(request, parsed.tenant_id);
+
     const db = getDb();
-    const statusFilter =
-      parsed.status === "all" ? undefined : eq(reviewQueue.status, parsed.status);
+    const result = await listReviewQueuePage(
+      db,
+      parsed.tenant_id,
+      parsed.status,
+      parsed.limit,
+      parsed.cursor,
+    );
 
-    const rows = await db
-      .select({
-        id: reviewQueue.id,
-        reason: reviewQueue.reason,
-        status: reviewQueue.status,
-        runId: reviewQueue.runId,
-        createdAt: reviewQueue.createdAt,
-        transactionId: transactions.id,
-        externalTransactionId: transactions.externalTransactionId,
-        vendorRaw: transactions.vendorRaw,
-        amount: transactions.amount,
-        currency: transactions.currency,
-        taggingDecision: transactions.taggingDecision,
-        confidence: transactions.confidence,
-        suggestedGlCode: chartOfAccounts.glCode,
-      })
-      .from(reviewQueue)
-      .innerJoin(transactions, eq(reviewQueue.transactionId, transactions.id))
-      .leftJoin(chartOfAccounts, eq(transactions.suggestedGlAccountId, chartOfAccounts.id))
-      .where(
-        statusFilter
-          ? and(eq(reviewQueue.tenantId, parsed.tenant_id), statusFilter)
-          : eq(reviewQueue.tenantId, parsed.tenant_id),
-      )
-      .orderBy(desc(reviewQueue.createdAt))
-      .limit(parsed.limit);
-
-    return NextResponse.json({ items: rows, count: rows.length });
+    return NextResponse.json({
+      items: result.items.map((row) => ({
+        ...row,
+        createdAt:
+          row.createdAt instanceof Date
+            ? row.createdAt.toISOString()
+            : new Date(String(row.createdAt)).toISOString(),
+      })),
+      page: result.page,
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Review queue fetch failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return toRouteErrorResponse(error, "Review queue fetch failed");
   }
 }

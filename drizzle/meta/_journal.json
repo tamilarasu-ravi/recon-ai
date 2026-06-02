@@ -15,6 +15,20 @@
       "when": 1780293265944,
       "tag": "0001_great_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780400000000,
+      "tag": "0002_product_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780500000000,
+      "tag": "0003_webhook_secrets",
+      "breakpoints": true
     }
   ]
 }

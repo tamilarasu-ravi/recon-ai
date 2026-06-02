@@ -11,6 +11,7 @@ import {
 } from "@/lib/data/parse-transaction-text";
 import { loadEnv } from "@/lib/config/env";
 import { createDb } from "@/lib/db/client";
+import { runCliScript } from "./lib/close-cli-resources.js";
 import { tenants } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -232,7 +233,4 @@ async function main(): Promise<void> {
   console.log(`Import complete. New labeled transactions: ${total}`);
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+runCliScript(main);

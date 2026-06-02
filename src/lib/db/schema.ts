@@ -159,6 +159,9 @@ export const transactions = pgTable(
     taxCode: text("tax_code"),
     dimensions: jsonb("dimensions"),
     processingStatus: processingStatusEnum("processing_status").notNull().default("pending"),
+    erpProvider: text("erp_provider"),
+    erpExternalId: text("erp_external_id"),
+    erpPostedAt: timestamp("erp_posted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -327,6 +330,42 @@ export const invoices = pgTable(
     index("invoices_tenant_id_idx").on(table.tenantId),
     uniqueIndex("invoices_tenant_external_uidx").on(table.tenantId, table.externalInvoiceId),
   ],
+);
+
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("api_keys_tenant_id_idx").on(table.tenantId),
+    uniqueIndex("api_keys_key_hash_uidx").on(table.keyHash),
+  ],
+);
+
+export const webhookSecrets = pgTable(
+  "webhook_secrets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    secretPrefix: text("secret_prefix").notNull(),
+    /** Server-only signing material for HMAC verification — never returned by list APIs. */
+    signingSecret: text("signing_secret").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("webhook_secrets_tenant_id_idx").on(table.tenantId)],
 );
 
 export const apRecommendations = pgTable(

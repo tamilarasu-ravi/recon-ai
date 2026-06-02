@@ -56,6 +56,12 @@ export async function exportAuditToLangfuse(input: AppendAuditInput): Promise<vo
   const costUsd =
     typeof observability.cost_usd === "number" ? observability.cost_usd : undefined;
   const model = typeof observability.model === "string" ? observability.model : undefined;
+  const promptTokens =
+    typeof observability.prompt_tokens === "number" ? observability.prompt_tokens : undefined;
+  const completionTokens =
+    typeof observability.completion_tokens === "number"
+      ? observability.completion_tokens
+      : undefined;
 
   const trace = client.trace({
     id: input.runId,
@@ -79,10 +85,17 @@ export async function exportAuditToLangfuse(input: AppendAuditInput): Promise<vo
     },
   });
 
-  if (model !== undefined || costUsd !== undefined) {
+  if (model !== undefined || costUsd !== undefined || promptTokens !== undefined) {
     trace.generation({
       name: `${input.agent}_llm`,
       model: model ?? "fixture",
+      usage:
+        promptTokens !== undefined || completionTokens !== undefined
+          ? {
+              input: promptTokens,
+              output: completionTokens,
+            }
+          : undefined,
       metadata: {
         cost_usd: costUsd,
         prompt_version: observability.prompt_version,

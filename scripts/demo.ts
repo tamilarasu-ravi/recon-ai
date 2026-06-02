@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { config as loadDotenv } from "dotenv";
 
-import { createDb, closeDb } from "@/lib/db/client";
+import { createDb } from "@/lib/db/client";
+import { runCliScript } from "./lib/close-cli-resources.js";
 import { applyTransactionOverride } from "@/lib/orchestrator/apply-override";
 import { getTenantIdBySlug, runApPipeline } from "@/lib/orchestrator/run-ap-pipeline";
 import { reprocessTransactionTagging } from "@/lib/orchestrator/reprocess-tagging";
-import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
+import { resumeAutoTagApproval, runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 import { receipts } from "@/lib/db/schema";
 
 loadDotenv({ path: ".env.local" });
@@ -64,31 +65,53 @@ async function main(): Promise<void> {
   console.log(`tenant_id: ${tenantId}`);
   console.log(`demo_run_id: ${demoRunId} (fresh external ids — safe to re-run)`);
 
-  const slackResult = await runTaggingPipeline(db, {
-    tenantId,
-    externalTransactionId: demoExternalId(demoRunId, "slack-55"),
-    transactionTimestamp: DEMO_TIMESTAMP,
-    amount: "55.00",
-    currency: "USD",
-    vendorRaw: "Slack",
-  });
-  logStep("1. Tagging — Slack $55 (under receipt threshold)", slackResult);
+  const slackResult = await runTaggingPipeline(
+    db,
+    {
+      tenantId,
+      externalTransactionId: demoExternalId(demoRunId, "slack-55"),
+      transactionTimestamp: DEMO_TIMESTAMP,
+      amount: "55.00",
+      currency: "USD",
+      vendorRaw: "Slack",
+    },
+    { hitlEnabled: true },
+  );
+  logStep("1. Tagging — Slack $55 (HITL AUTO_TAG gate)", slackResult);
   if (slackResult.status === "duplicate") {
     throw new Error("Unexpected duplicate on step 1 — demo_run_id should be unique");
   }
-  if (slackResult.decision !== "AUTO_TAG") {
-    throw new Error(`Expected AUTO_TAG for Slack $55, got ${slackResult.decision}`);
+
+  let slackDecision = slackResult.decision;
+  if (slackResult.status === "pending_approval") {
+    const approved = await resumeAutoTagApproval(
+      db,
+      tenantId,
+      slackResult.transactionId,
+      slackResult.runId,
+      true,
+    );
+    logStep("1b. HITL — approve AUTO_TAG (LangGraph resume)", approved);
+    slackDecision = approved.decision;
   }
 
-  const awsReceiptResult = await runTaggingPipeline(db, {
-    tenantId,
-    externalTransactionId: demoExternalId(demoRunId, "aws-99"),
-    transactionTimestamp: DEMO_TIMESTAMP,
-    amount: "99.00",
-    currency: "USD",
-    vendorRaw: "AWS",
-    memo: "ec2",
-  });
+  if (slackDecision !== "AUTO_TAG") {
+    throw new Error(`Expected AUTO_TAG for Slack $55, got ${slackDecision}`);
+  }
+
+  const awsReceiptResult = await runTaggingPipeline(
+    db,
+    {
+      tenantId,
+      externalTransactionId: demoExternalId(demoRunId, "aws-99"),
+      transactionTimestamp: DEMO_TIMESTAMP,
+      amount: "99.00",
+      currency: "USD",
+      vendorRaw: "AWS",
+      memo: "ec2",
+    },
+    { skipHitl: true },
+  );
   logStep("2. Policy + tagging — AWS $99 (receipt required)", awsReceiptResult);
   if (awsReceiptResult.status === "duplicate") {
     throw new Error("Unexpected duplicate on step 2 — demo_run_id should be unique");
@@ -117,15 +140,19 @@ async function main(): Promise<void> {
     throw new Error(`Expected AUTO_TAG after receipt, got ${awsRetag.decision}`);
   }
 
-  const zephyrFirst = await runTaggingPipeline(db, {
-    tenantId,
-    externalTransactionId: demoExternalId(demoRunId, "zephyr-1"),
-    transactionTimestamp: DEMO_TIMESTAMP,
-    amount: "1200.00",
-    currency: "USD",
-    vendorRaw: "Zephyr Labs LLC",
-    memo: "consulting",
-  });
+  const zephyrFirst = await runTaggingPipeline(
+    db,
+    {
+      tenantId,
+      externalTransactionId: demoExternalId(demoRunId, "zephyr-1"),
+      transactionTimestamp: DEMO_TIMESTAMP,
+      amount: "1200.00",
+      currency: "USD",
+      vendorRaw: "Zephyr Labs LLC",
+      memo: "consulting",
+    },
+    { skipHitl: true },
+  );
   logStep("4. New vendor — Zephyr (before override)", zephyrFirst);
 
   const override = await applyTransactionOverride(db, {
@@ -135,15 +162,19 @@ async function main(): Promise<void> {
   });
   logStep("5. Accountant override → vendor rule", override);
 
-  const zephyrReplay = await runTaggingPipeline(db, {
-    tenantId,
-    externalTransactionId: demoExternalId(demoRunId, "zephyr-2"),
-    transactionTimestamp: DEMO_TIMESTAMP,
-    amount: "50.00",
-    currency: "USD",
-    vendorRaw: "Zephyr Labs LLC",
-    memo: "follow-on consulting",
-  });
+  const zephyrReplay = await runTaggingPipeline(
+    db,
+    {
+      tenantId,
+      externalTransactionId: demoExternalId(demoRunId, "zephyr-2"),
+      transactionTimestamp: DEMO_TIMESTAMP,
+      amount: "50.00",
+      currency: "USD",
+      vendorRaw: "Zephyr Labs LLC",
+      memo: "follow-on consulting",
+    },
+    { skipHitl: true },
+  );
   logStep("6. Replay similar vendor (learning loop)", zephyrReplay);
   if (zephyrReplay.decision !== "AUTO_TAG") {
     throw new Error(`Expected AUTO_TAG after override learning, got ${zephyrReplay.decision}`);
@@ -183,15 +214,19 @@ async function main(): Promise<void> {
   }
 
   const tenantBId = await getTenantIdBySlug(db, "tenant-b");
-  const refuseResult = await runTaggingPipeline(db, {
-    tenantId: tenantBId,
-    externalTransactionId: demoExternalId(demoRunId, "refuse-courier"),
-    transactionTimestamp: DEMO_TIMESTAMP,
-    amount: "60.00",
-    currency: "USD",
-    vendorRaw: "Unknown Courier 42",
-    memo: "showcase refuse path",
-  });
+  const refuseResult = await runTaggingPipeline(
+    db,
+    {
+      tenantId: tenantBId,
+      externalTransactionId: demoExternalId(demoRunId, "refuse-courier"),
+      transactionTimestamp: DEMO_TIMESTAMP,
+      amount: "60.00",
+      currency: "USD",
+      vendorRaw: "Unknown Courier 42",
+      memo: "showcase refuse path",
+    },
+    { skipHitl: true },
+  );
   logStep("9. REFUSE — unknown vendor (tenant-b)", refuseResult);
   if (refuseResult.status === "duplicate") {
     throw new Error("Unexpected duplicate on REFUSE step");
@@ -203,13 +238,4 @@ async function main(): Promise<void> {
   console.log("\n✅ Demo complete — all steps passed (incl. REFUSE).");
 }
 
-main()
-  .then(async () => {
-    await closeDb();
-    process.exit(0);
-  })
-  .catch(async (error: unknown) => {
-    console.error(error);
-    await closeDb();
-    process.exit(1);
-  });
+runCliScript(main);

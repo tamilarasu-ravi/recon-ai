@@ -5,15 +5,8 @@ import { usePathname } from "next/navigation";
 
 import { useTenant } from "@/app/components/tenant-provider";
 
-const linkStyle = (active: boolean): React.CSSProperties => ({
-  marginRight: "1rem",
-  color: active ? "#111" : "#555",
-  fontWeight: active ? 600 : 400,
-  textDecoration: "none",
-});
-
 /**
- * Top navigation with tenant selector for capstone demo UI.
+ * Top navigation with tenant selector for the ReconAI operator UI.
  *
  * @returns Nav bar element.
  */
@@ -21,43 +14,57 @@ export function AppNav(): React.ReactElement {
   const pathname = usePathname();
   const { tenants, tenantId, setTenantId, loading, error } = useTenant();
 
+  const navItems = [
+    { href: "/", label: "Home", active: pathname === "/" },
+    { href: "/review-queue", label: "Review queue", active: pathname.startsWith("/review-queue") },
+    { href: "/ap", label: "AP inbox", active: pathname.startsWith("/ap") },
+    { href: "/policy", label: "Policy", active: pathname.startsWith("/policy") },
+    { href: "/orchestrator", label: "Orchestrator", active: pathname.startsWith("/orchestrator") },
+    { href: "/settings", label: "Settings", active: pathname.startsWith("/settings") },
+  ];
+
   return (
-    <header
-      style={{
-        borderBottom: "1px solid #e5e7eb",
-        padding: "1rem 2rem",
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: "1rem",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <strong style={{ marginRight: "1.5rem" }}>ReconAI</strong>
-      <nav>
-        <Link href="/" style={linkStyle(pathname === "/")}>
-          Home
+    <header className="app-header">
+      <div className="app-header__inner">
+        <Link href="/" className="app-brand">
+          <span className="app-brand__mark" aria-hidden>
+            R
+          </span>
+          ReconAI
         </Link>
-        <Link href="/review-queue" style={linkStyle(pathname.startsWith("/review-queue"))}>
-          Review queue
-        </Link>
-      </nav>
-      <label style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <span style={{ fontSize: "0.875rem", color: "#666" }}>Tenant</span>
-        <select
-          value={tenantId ?? ""}
-          disabled={loading || tenants.length === 0}
-          onChange={(e) => setTenantId(e.target.value)}
-          style={{ padding: "0.35rem 0.5rem", borderRadius: 6, border: "1px solid #ccc" }}
-        >
-          {tenants.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.slug}
-            </option>
+
+        <nav className="app-nav" aria-label="Main">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`nav-link${item.active ? " nav-link--active" : ""}`}
+            >
+              {item.label}
+            </Link>
           ))}
-        </select>
-      </label>
-      {error ? <span style={{ color: "#b91c1c", fontSize: "0.875rem" }}>{error}</span> : null}
+        </nav>
+
+        <div className="app-header__actions">
+          <label className="tenant-select">
+            <span className="tenant-select__label">Tenant</span>
+            <select
+              className="select"
+              value={tenantId ?? ""}
+              disabled={loading || tenants.length === 0}
+              onChange={(e) => setTenantId(e.target.value)}
+              aria-label="Select tenant"
+            >
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.slug}
+                </option>
+              ))}
+            </select>
+          </label>
+          {error ? <span className="alert alert--error" style={{ padding: "0.25rem 0.5rem" }}>{error}</span> : null}
+        </div>
+      </div>
     </header>
   );
 }

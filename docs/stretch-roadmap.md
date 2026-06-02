@@ -1,6 +1,8 @@
-# Stretch roadmap (ahead of schedule — June 2026)
+# Stretch roadmap (historical — June 2026 capstone)
 
-You are **feature-complete** for the 3-week tier before the calendar says so. Use extra time for **standard tier** polish and showcase prep—not new hero scope.
+> **Superseded for product planning** by [product-roadmap.md](./product-roadmap.md) and [STRATEGY.md](../STRATEGY.md). Kept for capstone archive context.
+
+You were **feature-complete** for the 3-week tier before the calendar said so. Extra time went to standard-tier polish and showcase prep—not new hero scope.
 
 ## Done early (calendar Jun 7–10 work)
 

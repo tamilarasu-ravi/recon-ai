@@ -128,7 +128,7 @@ export async function suggestTagging(
   } catch (error) {
     const message =
       error instanceof LlmUnavailableError
-        ? "llm_unavailable"
+        ? error.message
         : error instanceof Error
           ? error.message
           : "llm_failed";

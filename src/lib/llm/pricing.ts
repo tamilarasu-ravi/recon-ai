@@ -1,6 +1,8 @@
 /** Approximate USD cost per 1M tokens — dev-scale estimates for audit traces. */
 const PRICING_USD_PER_MILLION = {
   google: {
+    "gemini-2.5-flash": { input: 0.15, output: 0.6 },
+    "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
     "gemini-2.0-flash": { input: 0.1, output: 0.4 },
     "gemini-1.5-flash": { input: 0.075, output: 0.3 },
     "gemini-embedding-001": { input: 0.025, output: 0 },

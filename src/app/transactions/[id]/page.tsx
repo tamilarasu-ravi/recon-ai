@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { PageLoadingFallback } from "@/app/components/page-loading-fallback";
 import { TransactionDetailClient } from "@/app/transactions/[id]/transaction-detail-client";
 
 /**
@@ -9,7 +10,7 @@ import { TransactionDetailClient } from "@/app/transactions/[id]/transaction-det
  */
 export default function TransactionDetailPage(): React.ReactElement {
   return (
-    <Suspense fallback={<main style={{ padding: "2rem" }}>Loading…</main>}>
+    <Suspense fallback={<PageLoadingFallback />}>
       <TransactionDetailClient />
     </Suspense>
   );

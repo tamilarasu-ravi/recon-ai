@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -11,6 +12,27 @@ import {
 } from "react";
 
 const STORAGE_KEY = "recon-tenant-id";
+
+/**
+ * Returns true when the pathname is a single-transaction detail route.
+ *
+ * @param pathname - Current Next.js pathname.
+ * @returns Whether the user is on /transactions/[id].
+ */
+/**
+ * Returns true when the pathname is a tenant-scoped entity detail route.
+ *
+ * @param pathname - Current Next.js pathname.
+ * @param segment - First path segment (e.g. transactions, ap).
+ * @returns Whether the user is on /{segment}/[id].
+ */
+function isEntityDetailPath(pathname: string | null, segment: string): boolean {
+  if (!pathname) {
+    return false;
+  }
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.length === 2 && segments[0] === segment;
+}
 
 export interface TenantOption {
   id: string;
@@ -35,6 +57,8 @@ const TenantContext = createContext<TenantContextValue | null>(null);
  * @returns Provider wrapping children.
  */
 export function TenantProvider({ children }: { children: ReactNode }): React.ReactElement {
+  const pathname = usePathname();
+  const router = useRouter();
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [tenantId, setTenantIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,10 +99,20 @@ export function TenantProvider({ children }: { children: ReactNode }): React.Rea
     };
   }, []);
 
-  const setTenantId = useCallback((id: string) => {
-    setTenantIdState(id);
-    localStorage.setItem(STORAGE_KEY, id);
-  }, []);
+  const setTenantId = useCallback(
+    (id: string) => {
+      const isTenantSwitch = tenantId !== null && tenantId !== id;
+      if (
+        isTenantSwitch &&
+        (isEntityDetailPath(pathname, "transactions") || isEntityDetailPath(pathname, "ap"))
+      ) {
+        router.replace(isEntityDetailPath(pathname, "ap") ? "/ap" : "/review-queue");
+      }
+      setTenantIdState(id);
+      localStorage.setItem(STORAGE_KEY, id);
+    },
+    [tenantId, pathname, router],
+  );
 
   const value = useMemo(
     () => ({ tenants, tenantId, setTenantId, loading, error }),

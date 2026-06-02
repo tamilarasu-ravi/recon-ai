@@ -1,13 +1,15 @@
 import { and, eq } from "drizzle-orm";
 
-import { evaluateTransactionPolicy } from "@/lib/agents/policy/evaluator";
 import type { PolicyOutcome } from "@/lib/agents/policy/types";
-import { isReceiptRequiredAndNotCleared } from "@/lib/agents/policy/receipt-status";
-import { runTaggingAgent } from "@/lib/agents/tagging/run-tagging-agent";
 import type { DbClient } from "@/lib/db/client";
-import { appendAuditLog, appendEvent } from "@/lib/audit/writers";
+import { appendEvent } from "@/lib/audit/writers";
 import { deriveIdempotencyKey, loadEnv, newRunId } from "@/lib/config/env";
-import { reviewQueue, transactions } from "@/lib/db/schema";
+import { transactions } from "@/lib/db/schema";
+import type { AutoTagInterruptPayload } from "@/lib/orchestrator/langgraph/invoke-result";
+import {
+  invokeTaggingGraph,
+  resumeTaggingGraph,
+} from "@/lib/orchestrator/langgraph/tagging-graph";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
 
 export interface TransactionCreatedInput {
@@ -24,38 +26,68 @@ export interface TransactionCreatedInput {
 export interface PipelineOptions {
   /** When true, skips policy evaluation (tagging eval harness only). */
   skipPolicy?: boolean;
+  /** When true, skips AUTO_TAG HITL interrupt (eval, demo batch runs). */
+  skipHitl?: boolean;
+  /** Override env AUTO_TAG_HITL_ENABLED for this invocation. */
+  hitlEnabled?: boolean;
 }
 
 export interface PipelineResult {
   runId: string;
   transactionId: string;
-  status: "accepted" | "duplicate";
+  status: "accepted" | "duplicate" | "pending_approval";
   policyOutcome?: PolicyOutcome;
   policyVersion?: string;
   decision?: TaggingDecision;
   confidence?: number;
   suggestedGlAccountId?: string | null;
+  interrupt?: AutoTagInterruptPayload;
+}
+
+export interface ResumeAutoTagResult {
+  runId: string;
+  transactionId: string;
+  status: "accepted" | "pending_approval";
+  decision: TaggingDecision;
+  confidence: number;
+  policyOutcome: PolicyOutcome;
+  policyVersion: string;
+  suggestedGlAccountId: string | null;
 }
 
 /**
- * Downgrades AUTO_TAG when policy outcome requires human review before posting.
+ * Maps completed graph state to pipeline API result fields.
  *
- * @param decision - Tagging agent decision.
- * @param policyOutcome - Policy evaluation outcome.
- * @returns Final decision after policy cap.
+ * @param runId - Orchestrator run identifier.
+ * @param transactionId - Transaction UUID.
+ * @param graphState - Final LangGraph state after invoke or resume.
+ * @returns Accepted pipeline result payload.
+ * @throws Error when required graph fields are missing.
  */
-function applyPolicyDecisionCap(
-  decision: TaggingDecision,
-  policyOutcome: PolicyOutcome,
-): TaggingDecision {
-  if (decision === "AUTO_TAG" && policyOutcome === "FLAG_REVIEW") {
-    return "QUEUE_REVIEW";
+function toAcceptedPipelineResult(
+  runId: string,
+  transactionId: string,
+  graphState: Awaited<ReturnType<typeof invokeTaggingGraph>>["state"],
+): PipelineResult {
+  if (!graphState.policyResult || !graphState.taggingResult || !graphState.finalDecision) {
+    throw new Error("LangGraph tagging workflow did not produce a final decision");
   }
-  return decision;
+
+  return {
+    runId,
+    transactionId,
+    status: "accepted",
+    policyOutcome: graphState.policyResult.outcome,
+    policyVersion: graphState.policyResult.policyVersion,
+    decision: graphState.finalDecision,
+    confidence: graphState.taggingResult.confidence,
+    suggestedGlAccountId: graphState.taggingResult.suggestedGlAccountId,
+  };
 }
 
 /**
  * Runs the full transaction ingest and tagging pipeline for one transaction.
+ * Idempotency and ingest are handled here; policy → tagging runs via LangGraph.
  *
  * @param db - Drizzle database client.
  * @param input - Sanitized transaction ingest payload.
@@ -128,135 +160,118 @@ export async function runTaggingPipeline(
     },
   });
 
-  const policyResult = options?.skipPolicy
-    ? {
-        outcome: "ALLOW" as const,
-        policyVersion: "eval-skip",
-        policyId: "00000000-0000-0000-0000-000000000000",
-        matchedRules: [],
-      }
-    : await evaluateTransactionPolicy(db, input.tenantId, {
-        amount: input.amount,
-        currency: input.currency,
-        mcc: input.mcc,
-      });
+  const graphResult = await invokeTaggingGraph(
+    db,
+    env,
+    {
+      runId,
+      tenantId: input.tenantId,
+      transactionId: transaction.id,
+      vendorRaw: input.vendorRaw,
+      memo: input.memo,
+      amount: input.amount,
+      currency: input.currency,
+      mcc: input.mcc,
+    },
+    {
+      skipPolicy: options?.skipPolicy,
+      skipHitl: options?.skipHitl,
+      hitlEnabled: options?.hitlEnabled,
+      mode: "ingest",
+    },
+  );
 
-  if (!options?.skipPolicy) {
+  if (graphResult.interrupted && graphResult.interruptPayload) {
     await appendEvent(db, {
       tenantId: input.tenantId,
-      eventType: "PolicyEvaluated",
+      eventType: "AutoTagPendingApproval",
       runId,
       payload: {
         transaction_id: transaction.id,
-        policy_version: policyResult.policyVersion,
-        outcome: policyResult.outcome,
-        matched_rules: policyResult.matchedRules,
+        interrupt: graphResult.interruptPayload,
       },
     });
 
-    await appendAuditLog(db, {
-      tenantId: input.tenantId,
+    return {
       runId,
-      agent: "policy",
       transactionId: transaction.id,
-      policyVersion: policyResult.policyVersion,
-      observability: {
-        outcome: policyResult.outcome,
-        matched_rules: policyResult.matchedRules,
-      },
-    });
+      status: "pending_approval",
+      policyOutcome: graphResult.state.policyResult?.outcome,
+      policyVersion: graphResult.state.policyResult?.policyVersion,
+      decision: "AUTO_TAG",
+      confidence: graphResult.state.taggingResult?.confidence,
+      suggestedGlAccountId: graphResult.state.taggingResult?.suggestedGlAccountId ?? null,
+      interrupt: graphResult.interruptPayload,
+    };
   }
 
-  const receiptBlocked = options?.skipPolicy
-    ? false
-    : await isReceiptRequiredAndNotCleared(
-        db,
-        input.tenantId,
-        transaction.id,
-        policyResult.outcome,
-      );
+  return toAcceptedPipelineResult(runId, transaction.id, graphResult.state);
+}
 
-  const taggingResult = await runTaggingAgent(db, env, {
-    tenantId: input.tenantId,
-    transactionId: transaction.id,
-    vendorRaw: input.vendorRaw,
-    memo: input.memo,
-    amount: input.amount,
-    currency: input.currency,
-    mcc: input.mcc,
-    receiptRequiredAndNotCleared: receiptBlocked,
+/**
+ * Resumes a paused AUTO_TAG workflow after human approval or rejection.
+ *
+ * @param db - Drizzle database client.
+ * @param tenantId - Tenant UUID.
+ * @param transactionId - Transaction UUID.
+ * @param runId - LangGraph thread_id from pending_approval response.
+ * @param approved - True to post AUTO_TAG; false to queue for review.
+ * @returns Final tagging decision after graph resume.
+ * @throws Error when transaction is not found or graph resume fails.
+ */
+export async function resumeAutoTagApproval(
+  db: DbClient,
+  tenantId: string,
+  transactionId: string,
+  runId: string,
+  approved: boolean,
+): Promise<ResumeAutoTagResult> {
+  const env = loadEnv();
+
+  const txnRows = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.id, transactionId), eq(transactions.tenantId, tenantId)))
+    .limit(1);
+
+  if (!txnRows[0]) {
+    throw new Error("Transaction not found for tenant");
+  }
+
+  const graphResult = await resumeTaggingGraph(db, env, runId, approved, {
+    hitlEnabled: env.AUTO_TAG_HITL_ENABLED,
+    mode: "ingest",
   });
 
-  const finalDecision = applyPolicyDecisionCap(taggingResult.decision, policyResult.outcome);
-  const finalReason =
-    finalDecision !== taggingResult.decision ? "policy_flag_review" : taggingResult.reason;
+  if (graphResult.interrupted) {
+    throw new Error("Graph still interrupted after resume — unexpected state");
+  }
 
-  if (finalDecision !== taggingResult.decision) {
-    await db
-      .update(transactions)
-      .set({
-        taggingDecision: finalDecision,
-        updatedAt: new Date(),
-      })
-      .where(eq(transactions.id, transaction.id));
+  const accepted = toAcceptedPipelineResult(runId, transactionId, graphResult.state);
+
+  if (accepted.status !== "accepted" || !accepted.decision) {
+    throw new Error("Resume did not produce an accepted pipeline result");
   }
 
   await appendEvent(db, {
-    tenantId: input.tenantId,
-    eventType: "TransactionTagged",
+    tenantId,
+    eventType: approved ? "AutoTagApproved" : "AutoTagRejected",
     runId,
     payload: {
-      transaction_id: transaction.id,
-      decision: finalDecision,
-      confidence: taggingResult.confidence,
-      gl_account_id: finalDecision === "AUTO_TAG" ? taggingResult.suggestedGlAccountId : undefined,
-      reason: finalReason,
-      policy_version: policyResult.policyVersion,
+      transaction_id: transactionId,
+      approved,
+      decision: accepted.decision,
     },
   });
-
-  if (finalDecision === "QUEUE_REVIEW" || finalDecision === "REFUSE") {
-    await db.insert(reviewQueue).values({
-      tenantId: input.tenantId,
-      transactionId: transaction.id,
-      reason: finalReason,
-      status: "open",
-      runId,
-    });
-  }
-
-  await appendAuditLog(db, {
-    tenantId: input.tenantId,
-    runId,
-    agent: "tagging",
-    transactionId: transaction.id,
-    decision: finalDecision,
-    confidence: taggingResult.confidence,
-    policyVersion: policyResult.policyVersion,
-    observability: {
-      steps: taggingResult.steps,
-      llm_skipped: taggingResult.llmSkipped,
-      llm_skipped_reason: taggingResult.llmSkippedReason,
-      suggested_gl_account_id: taggingResult.suggestedGlAccountId,
-      reason: finalReason,
-      receipt_blocked: receiptBlocked,
-      policy_outcome: policyResult.outcome,
-    },
-  });
-
-  await db
-    .update(transactions)
-    .set({ processingStatus: "completed", updatedAt: new Date() })
-    .where(eq(transactions.id, transaction.id));
 
   return {
     runId,
-    transactionId: transaction.id,
+    transactionId,
     status: "accepted",
-    policyOutcome: policyResult.outcome,
-    policyVersion: policyResult.policyVersion,
-    decision: finalDecision,
-    confidence: taggingResult.confidence,
-    suggestedGlAccountId: taggingResult.suggestedGlAccountId,
+    decision: accepted.decision,
+    confidence: accepted.confidence ?? 0,
+    policyOutcome: accepted.policyOutcome ?? "ALLOW",
+    policyVersion: accepted.policyVersion ?? "unknown",
+    suggestedGlAccountId: accepted.suggestedGlAccountId ?? null,
   };
 }

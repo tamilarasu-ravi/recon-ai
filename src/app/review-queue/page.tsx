@@ -1,162 +1,145 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
+import { PageLayout } from "@/app/components/page-layout";
+import { DecisionBadge } from "@/app/components/ui/decision-badge";
+import { ReasonBadge } from "@/app/components/ui/reason-badge";
 import { useTenant } from "@/app/components/tenant-provider";
-import { formatReasonLabel, reasonChipColor } from "@/lib/ui/reason-labels";
-
-type QueueStatus = "open" | "resolved" | "all";
-
-interface ReviewQueueItem {
-  id: string;
-  reason: string;
-  status: string;
-  runId: string;
-  createdAt: string;
-  transactionId: string;
-  externalTransactionId: string;
-  vendorRaw: string;
-  amount: string;
-  currency: string;
-  taggingDecision: string | null;
-  confidence: string | null;
-  suggestedGlCode: string | null;
-}
-
-const pageStyle: React.CSSProperties = {
-  fontFamily: "system-ui, sans-serif",
-  padding: "2rem",
-  maxWidth: 960,
-};
+import { useReviewQueue } from "@/lib/ui/use-review-queue";
 
 /**
- * Review queue list with status filter and reason chips (Phase C UI).
+ * Review queue list with status filter, client cache, and cursor pagination.
  *
  * @returns Review queue page.
  */
 export default function ReviewQueuePage(): React.ReactElement {
   const { tenantId, loading: tenantLoading } = useTenant();
-  const [status, setStatus] = useState<QueueStatus>("open");
-  const [items, setItems] = useState<ReviewQueueItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<"open" | "resolved" | "all">("open");
 
-  const loadQueue = useCallback(async (): Promise<void> => {
-    if (!tenantId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        tenant_id: tenantId,
-        status,
-        limit: "50",
-      });
-      const response = await fetch(`/api/review-queue?${params}`);
-      if (!response.ok) {
-        const body = (await response.json()) as { error?: string };
-        throw new Error(body.error ?? `HTTP ${response.status}`);
-      }
-      const data = (await response.json()) as { items: ReviewQueueItem[] };
-      setItems(data.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load queue");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantId, status]);
+  const {
+    items,
+    loading,
+    loadingMore,
+    revalidating,
+    error,
+    hasMore,
+    fromCache,
+    loadMore,
+    refresh,
+  } = useReviewQueue({
+    tenantId,
+    status,
+    enabled: !tenantLoading && Boolean(tenantId),
+  });
 
-  useEffect(() => {
-    if (!tenantLoading && tenantId) {
-      void loadQueue();
-    }
-  }, [tenantId, tenantLoading, loadQueue]);
+  const isQueueBusy =
+    loading || loadingMore || (revalidating && items.length === 0);
 
   return (
-    <main style={pageStyle}>
-      <h1 style={{ marginTop: 0 }}>Review queue</h1>
-      <p style={{ color: "#555" }}>
-        Transactions in <code>QUEUE_REVIEW</code> or <code>REFUSE</code> awaiting accountant action.
-      </p>
-
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
-        {(["open", "resolved", "all"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setStatus(value)}
-            style={{
-              padding: "0.4rem 0.75rem",
-              borderRadius: 6,
-              border: status === value ? "2px solid #111" : "1px solid #ccc",
-              background: status === value ? "#f9fafb" : "#fff",
-              cursor: "pointer",
-            }}
-          >
-            {value}
-          </button>
-        ))}
+    <PageLayout
+      title="Review queue"
+      subtitle="Transactions in QUEUE_REVIEW or REFUSE awaiting accountant action."
+      loading={isQueueBusy}
+      blocking={isQueueBusy}
+      blockingLabel={
+        loadingMore ? "Loading more…" : revalidating ? "Updating queue…" : "Loading queue…"
+      }
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "0.75rem",
+          marginBottom: "1rem",
+        }}
+      >
+        <div className="segmented" role="tablist" aria-label="Queue status filter">
+          {(["open", "resolved", "all"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={status === value}
+              className={`segmented__btn${status === value ? " segmented__btn--active" : ""}`}
+              onClick={() => setStatus(value)}
+              disabled={isQueueBusy}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
-          onClick={() => void loadQueue()}
-          disabled={loading}
-          style={{ marginLeft: "auto", padding: "0.4rem 0.75rem" }}
+          className="btn btn--secondary"
+          style={{ marginLeft: "auto" }}
+          onClick={() => void refresh()}
+          disabled={isQueueBusy}
         >
-          Refresh
+          {revalidating ? "Updating…" : "Refresh"}
         </button>
       </div>
 
-      {loading ? <p>Loading…</p> : null}
-      {error ? <p style={{ color: "#b91c1c" }}>{error}</p> : null}
+      <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", margin: "0 0 1.25rem" }}>
+        {loading && items.length === 0
+          ? "Loading…"
+          : `Showing ${items.length} item${items.length === 1 ? "" : "s"}${hasMore ? " (more available)" : ""}`}
+        {fromCache && revalidating ? " · updating in background" : null}
+        {fromCache && !revalidating ? " · loaded from cache" : null}
+      </p>
 
-      {!loading && items.length === 0 ? (
-        <p style={{ color: "#666" }}>No items for this filter.</p>
+      {error ? <p className="alert alert--error">{error}</p> : null}
+
+      {!loading && !error && items.length === 0 ? (
+        <div className="empty-state">No items for this filter.</div>
       ) : null}
 
-      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      <ul className="queue-list">
         {items.map((item) => (
-          <li
-            key={item.id}
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              padding: "1rem",
-              marginBottom: "0.75rem",
-            }}
-          >
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-              <strong>{item.vendorRaw}</strong>
-              <span>
-                {item.amount} {item.currency}
-              </span>
-              <span
-                style={{
-                  fontSize: "0.75rem",
-                  padding: "0.15rem 0.5rem",
-                  borderRadius: 999,
-                  background: reasonChipColor(item.reason),
-                }}
-              >
-                {formatReasonLabel(item.reason)}
-              </span>
-              <span style={{ fontSize: "0.75rem", color: "#666" }}>{item.taggingDecision}</span>
-              {item.suggestedGlCode ? (
-                <span style={{ fontSize: "0.875rem" }}>GL {item.suggestedGlCode}</span>
-              ) : null}
-            </div>
-            <p style={{ margin: "0.5rem 0 0", fontSize: "0.875rem", color: "#666" }}>
-              {item.externalTransactionId} · conf {item.confidence ?? "—"}
-            </p>
+          <li key={item.id}>
             <Link
-              href={`/transactions/${item.transactionId}?tenant_id=${tenantId}`}
-              style={{ fontSize: "0.875rem" }}
+              href={`/transactions/${item.transactionId}?tenant_id=${encodeURIComponent(tenantId ?? "")}`}
+              className="queue-item queue-item--clickable"
             >
-              Why &amp; override →
+              <div className="queue-item__header">
+                <span className="queue-item__vendor">{item.vendorRaw}</span>
+                <span className="queue-item__amount">
+                  {item.amount} {item.currency}
+                </span>
+                <ReasonBadge reason={item.reason} />
+                <DecisionBadge decision={item.taggingDecision} />
+                {item.suggestedGlCode ? (
+                  <span
+                    className="badge badge--reason"
+                    style={{ background: "#f1f5f9", color: "#475569" }}
+                  >
+                    GL {item.suggestedGlCode}
+                  </span>
+                ) : null}
+              </div>
+              <p className="queue-item__meta" style={{ marginBottom: 0 }}>
+                <code>{item.externalTransactionId}</code> · confidence {item.confidence ?? "—"}
+              </p>
+              <span className="queue-item__footer">Why &amp; override →</span>
             </Link>
           </li>
         ))}
       </ul>
-    </main>
+
+      {hasMore ? (
+        <div style={{ marginTop: "1.25rem", textAlign: "center" }}>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading more…" : "Load more"}
+          </button>
+        </div>
+      ) : null}
+    </PageLayout>
   );
 }

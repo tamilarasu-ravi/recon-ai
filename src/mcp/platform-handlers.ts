@@ -1,11 +1,17 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
+import { newRunId } from "@/lib/config/env";
+
+import { listApInvoicesForTenant } from "@/lib/data/ap-invoice-list";
+import { getActivePolicyPack } from "@/lib/data/policy-admin";
+import { listReviewQueuePage } from "@/lib/data/review-queue-list";
+import { syncAutoTagToErp } from "@/lib/integrations/erp/sync-auto-tag";
 import { applyTransactionOverride } from "@/lib/orchestrator/apply-override";
-import { getTenantIdBySlug } from "@/lib/orchestrator/run-ap-pipeline";
+import { getTenantIdBySlug, runApPipeline } from "@/lib/orchestrator/run-ap-pipeline";
 import { reprocessTransactionTagging } from "@/lib/orchestrator/reprocess-tagging";
-import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
+import { resumeAutoTagApproval, runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 import type { DbClient } from "@/lib/db/client";
-import { chartOfAccounts, receipts, reviewQueue, tenants, transactions } from "@/lib/db/schema";
+import { receipts, tenants, transactions } from "@/lib/db/schema";
 
 /**
  * Serializes a handler result as MCP text content JSON.
@@ -80,32 +86,15 @@ export async function handleGetReviewQueue(
   limit = 25,
 ): Promise<unknown> {
   const tenantId = await resolveTenantId(db, tenantSlug);
-  const statusFilter = status === "all" ? undefined : eq(reviewQueue.status, status);
+  const result = await listReviewQueuePage(db, tenantId, status, limit);
 
-  const rows = await db
-    .select({
-      id: reviewQueue.id,
-      reason: reviewQueue.reason,
-      status: reviewQueue.status,
-      runId: reviewQueue.runId,
-      transactionId: transactions.id,
-      vendorRaw: transactions.vendorRaw,
-      amount: transactions.amount,
-      taggingDecision: transactions.taggingDecision,
-      suggestedGlCode: chartOfAccounts.glCode,
-    })
-    .from(reviewQueue)
-    .innerJoin(transactions, eq(reviewQueue.transactionId, transactions.id))
-    .leftJoin(chartOfAccounts, eq(transactions.suggestedGlAccountId, chartOfAccounts.id))
-    .where(
-      statusFilter
-        ? and(eq(reviewQueue.tenantId, tenantId), statusFilter)
-        : eq(reviewQueue.tenantId, tenantId),
-    )
-    .orderBy(desc(reviewQueue.createdAt))
-    .limit(limit);
-
-  return { items: rows, count: rows.length };
+  return {
+    items: result.items.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    page: result.page,
+  };
 }
 
 /**
@@ -199,4 +188,136 @@ export async function handleListTenants(db: DbClient): Promise<unknown> {
     .select({ id: tenants.id, slug: tenants.slug, name: tenants.name })
     .from(tenants);
   return { tenants: rows };
+}
+
+/**
+ * Resumes a paused AUTO_TAG LangGraph interrupt after human approval.
+ *
+ * @param db - Database client.
+ * @param input - Tenant slug, transaction id, run id, and approval flag.
+ * @returns Resume result from orchestrator.
+ */
+export async function handleApproveAutoTag(
+  db: DbClient,
+  input: {
+    tenant_slug: string;
+    transaction_id: string;
+    run_id: string;
+    approved: boolean;
+  },
+): Promise<unknown> {
+  const tenantId = await resolveTenantId(db, input.tenant_slug);
+  return resumeAutoTagApproval(
+    db,
+    tenantId,
+    input.transaction_id,
+    input.run_id,
+    input.approved,
+  );
+}
+
+/**
+ * Ingests an invoice and runs the AP recommend-only graph.
+ *
+ * @param db - Database client.
+ * @param input - Invoice ingest fields.
+ * @returns AP pipeline result.
+ */
+export async function handleIngestInvoice(
+  db: DbClient,
+  input: {
+    tenant_slug: string;
+    external_invoice_id: string;
+    vendor_raw: string;
+    amount: string;
+    currency: string;
+    invoice_date: string;
+  },
+): Promise<unknown> {
+  const tenantId = await resolveTenantId(db, input.tenant_slug);
+  return runApPipeline(db, {
+    tenantId,
+    externalInvoiceId: input.external_invoice_id,
+    vendorRaw: input.vendor_raw,
+    amount: input.amount,
+    currency: input.currency,
+    invoiceDate: input.invoice_date,
+  });
+}
+
+/**
+ * Lists AP invoices for a tenant.
+ *
+ * @param db - Database client.
+ * @param tenantSlug - Tenant slug.
+ * @returns Invoice list DTOs.
+ */
+export async function handleListInvoices(db: DbClient, tenantSlug: string): Promise<unknown> {
+  const tenantId = await resolveTenantId(db, tenantSlug);
+  const items = await listApInvoicesForTenant(db, tenantId);
+  return { items };
+}
+
+/**
+ * Returns the active policy pack and rules for a tenant.
+ *
+ * @param db - Database client.
+ * @param tenantSlug - Tenant slug.
+ * @returns Policy pack or null.
+ */
+export async function handleGetActivePolicy(db: DbClient, tenantSlug: string): Promise<unknown> {
+  const tenantId = await resolveTenantId(db, tenantSlug);
+  return { policy: await getActivePolicyPack(db, tenantId) };
+}
+
+/**
+ * Posts an AUTO_TAG transaction to the configured ERP adapter.
+ *
+ * @param db - Database client.
+ * @param tenantSlug - Tenant slug.
+ * @param transactionId - Transaction UUID.
+ * @param glAccountId - GL account to post (optional; uses txn GL if omitted).
+ * @returns ERP post result.
+ */
+export async function handlePostErp(
+  db: DbClient,
+  tenantSlug: string,
+  transactionId: string,
+  glAccountId?: string,
+): Promise<unknown> {
+  const tenantId = await resolveTenantId(db, tenantSlug);
+
+  let resolvedGlId = glAccountId;
+  if (!resolvedGlId) {
+    const txnRows = await db
+      .select({
+        glAccountId: transactions.glAccountId,
+        suggestedGlAccountId: transactions.suggestedGlAccountId,
+      })
+      .from(transactions)
+      .where(
+        and(eq(transactions.id, transactionId), eq(transactions.tenantId, tenantId)),
+      )
+      .limit(1);
+
+    const txn = txnRows[0];
+    if (!txn) {
+      throw new Error("Transaction not found for tenant");
+    }
+    resolvedGlId = txn.glAccountId ?? txn.suggestedGlAccountId ?? undefined;
+  }
+
+  if (!resolvedGlId) {
+    throw new Error("No GL account available for ERP post");
+  }
+
+  const runId = newRunId();
+  const posted = await syncAutoTagToErp(db, {
+    tenantId,
+    transactionId,
+    runId,
+    glAccountId: resolvedGlId,
+  });
+
+  return { run_id: runId, posted };
 }

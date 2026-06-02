@@ -44,6 +44,11 @@ Use your real `DATABASE_URL` from `.env`. Do not commit secrets.
 | `submit_override` | GL override + vendor rule |
 | `upload_receipt` | Mock receipt → clears receipt gate |
 | `reprocess_tagging` | Re-tag after receipt |
+| `approve_auto_tag` | Resume HITL interrupt |
+| `ingest_invoice` | AP graph (recommend-only) |
+| `list_invoices` | AP inbox list |
+| `get_active_policy` | Policy pack + rules |
+| `post_erp` | Mock ERP post for AUTO_TAG |
 
 ## Notes
 

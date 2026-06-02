@@ -9,7 +9,7 @@ type LlmProvider = z.infer<typeof llmProviderSchema>;
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   LLM_PROVIDER: llmProviderSchema.default("google"),
-  LLM_MODEL: z.string().min(1).default("gemini-2.0-flash"),
+  LLM_MODEL: z.string().min(1).default("gemini-2.5-flash"),
   LLM_MODEL_AP: z.string().min(1).optional(),
   EMBEDDING_MODEL: z.string().min(1).default("gemini-embedding-001"),
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(768),
@@ -23,6 +23,11 @@ const envSchema = z.object({
     .default("true")
     .transform((value) => value === "true"),
   LLM_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(3),
+  AUTO_TAG_HITL_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  LANGGRAPH_CHECKPOINTER: z.enum(["postgres", "memory"]).default("postgres"),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -77,10 +82,24 @@ function resolveLlmProvider(env: AppEnv): LlmProvider {
  * @returns Environment with provider-appropriate model defaults.
  */
 function alignModelsForProvider(env: AppEnv): AppEnv {
+  const googleDefaultModel = "gemini-2.5-flash";
+  const retiredGoogleModels = new Set(["gemini-2.0-flash", "gemini-2.0-flash-lite"]);
+
   if (env.LLM_PROVIDER === "google") {
+    let llmModel = env.LLM_MODEL;
+    if (llmModel.includes("gpt")) {
+      llmModel = googleDefaultModel;
+    } else if (retiredGoogleModels.has(llmModel)) {
+      llmModel = googleDefaultModel;
+    }
+
     return {
       ...env,
-      LLM_MODEL: env.LLM_MODEL.includes("gpt") ? "gemini-2.0-flash" : env.LLM_MODEL,
+      LLM_MODEL: llmModel,
+      LLM_MODEL_AP:
+        env.LLM_MODEL_AP && !retiredGoogleModels.has(env.LLM_MODEL_AP)
+          ? env.LLM_MODEL_AP
+          : llmModel,
       EMBEDDING_MODEL:
         env.EMBEDDING_MODEL === "text-embedding-3-small" ||
         env.EMBEDDING_MODEL === "text-embedding-004"
