@@ -16,7 +16,7 @@ Walk through the nine printed steps (tagging, receipt, override, AP duplicate, *
 pnpm dev
 ```
 
-Open **http://localhost:3000/review-queue** — filter open items, click **Why & override** for audit trace and GL override form. Run `pnpm demo` first to populate queue items.
+Open **http://localhost:3000/review-queue** — click a card to open transaction detail. On detail, use **Label memory (RAG)** to see top‑k similar labeled transactions (similarity + GL) for the selected run, then **Run trace** for graph steps. Run `pnpm demo` first to populate queue items.
 
 ## Option C — Live API only
 

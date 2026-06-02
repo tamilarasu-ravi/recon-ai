@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageLayout } from "@/app/components/page-layout";
+import { RetrievalContextPanel } from "@/app/components/retrieval-context-panel";
 import { TransactionRunTrace } from "@/app/components/transaction-run-trace";
 import { DecisionBadge } from "@/app/components/ui/decision-badge";
 import { ReasonBadge } from "@/app/components/ui/reason-badge";
@@ -14,6 +15,7 @@ import {
   formatEventRunLabel,
   groupTransactionEventsByRun,
 } from "@/lib/ui/group-transaction-events";
+import { parseRetrievalFromObservability } from "@/lib/ui/parse-retrieval";
 import { invalidateReviewQueueCache } from "@/lib/ui/use-review-queue";
 
 interface TransactionDetailResponse {
@@ -306,6 +308,10 @@ export function TransactionDetailClient(): React.ReactElement {
 
   const selectedAudit =
     detail?.audit_trail.find((row) => row.runId === selectedRunId) ?? detail?.audit_trail[0];
+  const selectedRetrieval = useMemo(
+    () => parseRetrievalFromObservability(selectedAudit?.observability),
+    [selectedAudit?.observability],
+  );
   const selectedRunEvents =
     eventRuns.find((group) => group.runId === selectedRunId)?.events ??
     detail?.events.filter((event) => event.runId === selectedRunId) ??
@@ -435,6 +441,8 @@ export function TransactionDetailClient(): React.ReactElement {
               </ul>
             </section>
           ) : null}
+
+          <RetrievalContextPanel retrieval={selectedRetrieval} tenantId={tenantId} />
 
           <div className="detail-grid">
             <section id="run-trace" className="panel panel--muted detail-grid__full">

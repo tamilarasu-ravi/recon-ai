@@ -8,6 +8,7 @@ import {
   buildEmbeddingText,
 } from "@/lib/agents/tagging/embed-transaction";
 import { lookupVendorRule } from "@/lib/agents/tagging/rule-lookup";
+import { buildRetrievalNeighborAuditRows } from "@/lib/agents/tagging/retrieval-audit";
 import { countLabeledTransactions, retrieveSimilarTransactions } from "@/lib/agents/tagging/retrieval";
 import { suggestTagging } from "@/lib/agents/tagging/suggest";
 import { normalizeVendor } from "@/lib/agents/tagging/vendor-normalize";
@@ -137,11 +138,29 @@ export async function runTaggingAgent(
         input.mcc,
       );
     }
+
+    const proposedGlFromRetrievalPreview = neighbors[0]?.glAccountId;
+    const supportCountPreview = proposedGlFromRetrievalPreview
+      ? neighbors.filter((neighbor) => neighbor.glAccountId === proposedGlFromRetrievalPreview).length
+      : 0;
+    const agreeFracPreview =
+      neighbors.length > 0 && proposedGlFromRetrievalPreview
+        ? supportCountPreview / neighbors.length
+        : 0;
+    const neighborAuditRows = await buildRetrievalNeighborAuditRows(db, neighbors, coaRows);
+
     steps.push({
       name: "retrieval",
       status: "ok",
       latency_ms: Date.now() - retrievalStarted,
-      detail: { neighbor_count: neighbors.length, top1_sim: neighbors[0]?.similarity ?? 0 },
+      detail: {
+        neighbor_count: neighbors.length,
+        top1_sim: neighbors[0]?.similarity ?? 0,
+        support_count: supportCountPreview,
+        agree_frac: agreeFracPreview,
+        labeled_corpus_count: labeledCount,
+        neighbors: neighborAuditRows,
+      },
     });
   } catch {
     steps.push({
