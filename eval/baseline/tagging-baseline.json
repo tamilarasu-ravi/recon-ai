@@ -1,0 +1,11 @@
+{
+  "eval_set_version": "tagging-v1",
+  "eval_set_hash": "a436b76e57c48b67",
+  "case_count": 30,
+  "pass_rate": 0.9667,
+  "auto_tag_precision": 1,
+  "review_rate": 0.4,
+  "refusal_rate": 0.1,
+  "llm_enable_live_calls": false,
+  "notes": "Deterministic CI baseline (LLM_ENABLE_LIVE_CALLS=false). Update only when eval expectations change intentionally."
+}

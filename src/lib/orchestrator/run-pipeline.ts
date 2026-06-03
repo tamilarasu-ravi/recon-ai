@@ -3,14 +3,14 @@ import { and, eq } from "drizzle-orm";
 import type { PolicyOutcome } from "@/lib/agents/policy/types";
 import type { DbClient } from "@/lib/db/client";
 import { appendEvent } from "@/lib/audit/writers";
-import { deriveIdempotencyKey, loadEnv, newRunId } from "@/lib/config/env";
+import { loadEnv, newRunId } from "@/lib/config/env";
 import { transactions } from "@/lib/db/schema";
 import type { AutoTagInterruptPayload } from "@/lib/orchestrator/langgraph/invoke-result";
-import {
-  invokeTaggingGraph,
-  resumeTaggingGraph,
-} from "@/lib/orchestrator/langgraph/tagging-graph";
+import { resumeTaggingGraph } from "@/lib/orchestrator/langgraph/tagging-graph";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
+import { processQueuedTransaction } from "@/lib/orchestrator/process-queued-transaction";
+import { queueTransactionIngest } from "@/lib/orchestrator/queue-transaction-ingest";
+import { toAcceptedPipelineResult } from "@/lib/orchestrator/run-pipeline-result";
 
 export interface TransactionCreatedInput {
   tenantId: string;
@@ -36,6 +36,7 @@ export interface PipelineResult {
   runId: string;
   transactionId: string;
   status: "accepted" | "duplicate" | "pending_approval";
+  processingStatus?: "pending" | "processing" | "completed" | "failed";
   policyOutcome?: PolicyOutcome;
   policyVersion?: string;
   decision?: TaggingDecision;
@@ -56,37 +57,7 @@ export interface ResumeAutoTagResult {
 }
 
 /**
- * Maps completed graph state to pipeline API result fields.
- *
- * @param runId - Orchestrator run identifier.
- * @param transactionId - Transaction UUID.
- * @param graphState - Final LangGraph state after invoke or resume.
- * @returns Accepted pipeline result payload.
- * @throws Error when required graph fields are missing.
- */
-function toAcceptedPipelineResult(
-  runId: string,
-  transactionId: string,
-  graphState: Awaited<ReturnType<typeof invokeTaggingGraph>>["state"],
-): PipelineResult {
-  if (!graphState.policyResult || !graphState.taggingResult || !graphState.finalDecision) {
-    throw new Error("LangGraph tagging workflow did not produce a final decision");
-  }
-
-  return {
-    runId,
-    transactionId,
-    status: "accepted",
-    policyOutcome: graphState.policyResult.outcome,
-    policyVersion: graphState.policyResult.policyVersion,
-    decision: graphState.finalDecision,
-    confidence: graphState.taggingResult.confidence,
-    suggestedGlAccountId: graphState.taggingResult.suggestedGlAccountId,
-  };
-}
-
-/**
- * Runs the full transaction ingest and tagging pipeline for one transaction.
+ * Runs the full transaction ingest and tagging pipeline for one transaction (synchronous).
  * Idempotency and ingest are handled here; policy → tagging runs via LangGraph.
  *
  * @param db - Drizzle database client.
@@ -99,113 +70,31 @@ export async function runTaggingPipeline(
   input: TransactionCreatedInput,
   options?: PipelineOptions,
 ): Promise<PipelineResult> {
-  const runId = newRunId();
-  const env = loadEnv();
-  const idempotencyKey = deriveIdempotencyKey(
-    input.tenantId,
-    input.externalTransactionId,
-    input.transactionTimestamp,
-  );
+  const queued = await queueTransactionIngest(db, input, { processingMode: "sync" });
 
-  const existingRows = await db
-    .select({
-      id: transactions.id,
-      taggingDecision: transactions.taggingDecision,
-      confidence: transactions.confidence,
-      suggestedGlAccountId: transactions.suggestedGlAccountId,
-    })
-    .from(transactions)
-    .where(
-      and(eq(transactions.tenantId, input.tenantId), eq(transactions.idempotencyKey, idempotencyKey)),
-    )
-    .limit(1);
-
-  const existing = existingRows[0];
-
-  if (existing) {
+  if (queued.status === "duplicate") {
     return {
-      runId,
-      transactionId: existing.id,
+      runId: queued.runId,
+      transactionId: queued.transactionId,
       status: "duplicate",
-      decision: existing.taggingDecision ?? undefined,
-      confidence: existing.confidence ? Number(existing.confidence) : undefined,
-      suggestedGlAccountId: existing.suggestedGlAccountId,
+      processingStatus: queued.processingStatus,
+      decision: queued.decision,
+      confidence: queued.confidence,
+      suggestedGlAccountId: queued.suggestedGlAccountId,
     };
   }
 
-  const [transaction] = await db
-    .insert(transactions)
-    .values({
-      tenantId: input.tenantId,
-      externalTransactionId: input.externalTransactionId,
-      idempotencyKey,
-      transactionTimestamp: new Date(input.transactionTimestamp),
-      amount: input.amount,
-      currency: input.currency,
-      vendorRaw: input.vendorRaw,
-      memo: input.memo,
-      mcc: input.mcc,
-      processingStatus: "processing",
-    })
-    .returning({ id: transactions.id });
-
-  await appendEvent(db, {
-    tenantId: input.tenantId,
-    eventType: "TransactionCreated",
-    runId,
-    payload: {
-      transaction_id: transaction.id,
-      external_transaction_id: input.externalTransactionId,
-      vendor_raw: input.vendorRaw,
-    },
-  });
-
-  const graphResult = await invokeTaggingGraph(
+  const env = loadEnv();
+  return processQueuedTransaction(
     db,
     env,
     {
-      runId,
-      tenantId: input.tenantId,
-      transactionId: transaction.id,
-      vendorRaw: input.vendorRaw,
-      memo: input.memo,
-      amount: input.amount,
-      currency: input.currency,
-      mcc: input.mcc,
+      ...input,
+      runId: queued.runId,
+      transactionId: queued.transactionId,
     },
-    {
-      skipPolicy: options?.skipPolicy,
-      skipHitl: options?.skipHitl,
-      hitlEnabled: options?.hitlEnabled,
-      mode: "ingest",
-    },
+    options,
   );
-
-  if (graphResult.interrupted && graphResult.interruptPayload) {
-    await appendEvent(db, {
-      tenantId: input.tenantId,
-      eventType: "AutoTagPendingApproval",
-      runId,
-      payload: {
-        transaction_id: transaction.id,
-        interrupt: graphResult.interruptPayload,
-      },
-    });
-
-    return {
-      runId,
-      transactionId: transaction.id,
-      status: "pending_approval",
-      policyOutcome: graphResult.state.policyResult?.outcome,
-      policyVersion: graphResult.state.policyResult?.policyVersion,
-      decision: "AUTO_TAG",
-      confidence: graphResult.state.taggingResult?.confidence,
-      suggestedGlAccountId: graphResult.state.taggingResult?.suggestedGlAccountId ?? null,
-      interrupt: graphResult.interruptPayload,
-    };
-  }
-
-  return toAcceptedPipelineResult(runId, transaction.id, graphResult.state);
 }
 
 /**

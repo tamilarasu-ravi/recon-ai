@@ -28,6 +28,7 @@ interface TransactionDetailResponse {
     currency: string;
     taggingDecision: string | null;
     confidence: string | null;
+    processingStatus: string | null;
     suggested_gl: { glCode: string; glName: string } | null;
     posted_gl: { glCode: string; glName: string } | null;
     erpProvider: string | null;
@@ -346,6 +347,14 @@ export function TransactionDetailClient(): React.ReactElement {
             ) : null}
 
             <div className="stat-grid">
+              <div className="stat">
+                <span className="stat__label">Processing</span>
+                <span className="stat__value">
+                  <span className={`processing-badge processing-badge--${detail.transaction.processingStatus ?? "pending"}`}>
+                    {detail.transaction.processingStatus ?? "—"}
+                  </span>
+                </span>
+              </div>
               <div className="stat">
                 <span className="stat__label">Decision</span>
                 <span className="stat__value">

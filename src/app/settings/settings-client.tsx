@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
+import { BulkImportPanel } from "@/app/settings/bulk-import-panel";
+import { DevIngestPanel } from "@/app/settings/dev-ingest-panel";
 import { PageLayout } from "@/app/components/page-layout";
 import { useTenant } from "@/app/components/tenant-provider";
 import {
@@ -38,6 +41,7 @@ export function SettingsClient(): React.ReactElement {
   const [listLoading, setListLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState(getClientApiKey() ?? "");
   const [newKeyName, setNewKeyName] = useState("integration");
   const [bootstrapSlug, setBootstrapSlug] = useState("tenant-a");
@@ -48,6 +52,12 @@ export function SettingsClient(): React.ReactElement {
   const [newWebhookName, setNewWebhookName] = useState("card-processor");
   const [createdRawWebhookSecret, setCreatedRawWebhookSecret] = useState<string | null>(null);
   const [erpProvider, setErpProvider] = useState("mock");
+  const [quickbooksConfigured, setQuickbooksConfigured] = useState(false);
+  const [qbConnection, setQbConnection] = useState<{
+    realmId: string | null;
+    connectedAt: string;
+  } | null>(null);
+  const searchParams = useSearchParams();
 
   const needsBootstrap = requireApiAuth && !tenantId && !getClientApiKey();
 
@@ -59,9 +69,11 @@ export function SettingsClient(): React.ReactElement {
           const data = (await response.json()) as {
             erp_provider: string;
             require_api_auth: boolean;
+            quickbooks_oauth_configured?: boolean;
           };
           setErpProvider(data.erp_provider);
           setRequireApiAuth(data.require_api_auth);
+          setQuickbooksConfigured(data.quickbooks_oauth_configured ?? false);
         }
       } catch {
         setErpProvider("mock");
@@ -127,11 +139,93 @@ export function SettingsClient(): React.ReactElement {
     }
   }, [tenantId]);
 
+  const loadErpConnections = useCallback(async (): Promise<void> => {
+    if (!tenantId) {
+      return;
+    }
+
+    try {
+      const response = await apiFetch(
+        `/api/erp/connections?tenant_id=${encodeURIComponent(tenantId)}`,
+      );
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("Save your API key above and select a tenant to manage ERP connections.");
+        }
+        return;
+      }
+
+      const data = (await response.json()) as {
+        connections: Array<{ provider: string; realmId: string | null; connectedAt: string }>;
+        quickbooks_oauth_configured: boolean;
+        erp_provider: string;
+      };
+
+      setErpProvider(data.erp_provider);
+      setQuickbooksConfigured(data.quickbooks_oauth_configured);
+      const qb = data.connections.find((row) => row.provider === "quickbooks_sandbox");
+      setQbConnection(
+        qb ? { realmId: qb.realmId, connectedAt: qb.connectedAt } : null,
+      );
+    } catch {
+      setQbConnection(null);
+    }
+  }, [tenantId]);
+
   useEffect(() => {
     if (!tenantLoading && tenantId) {
       void loadKeys();
+      void loadErpConnections();
     }
-  }, [tenantLoading, tenantId, loadKeys]);
+  }, [tenantLoading, tenantId, loadKeys, loadErpConnections]);
+
+  useEffect(() => {
+    const qbStatus = searchParams.get("qb");
+    const qbError = searchParams.get("qb_error");
+    if (qbStatus === "connected") {
+      setMessage("QuickBooks connected successfully.");
+      void loadErpConnections();
+    } else if (qbError) {
+      setError(`QuickBooks connect failed: ${decodeURIComponent(qbError)}`);
+    }
+  }, [searchParams, loadErpConnections]);
+
+  /**
+   * Starts QuickBooks OAuth using an authenticated fetch (plain links omit the API key).
+   */
+  async function startQuickBooksConnect(): Promise<void> {
+    if (!tenantId) {
+      setError("Select a tenant in the header before connecting QuickBooks.");
+      return;
+    }
+
+    setError(null);
+    setActionLoading(true);
+
+    try {
+      const response = await apiFetch(
+        `/api/erp/connect/quickbooks?tenant_id=${encodeURIComponent(tenantId)}`,
+        { redirect: "manual" },
+      );
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("Location");
+        if (location) {
+          window.location.href = location;
+          return;
+        }
+      }
+
+      if (!response.ok) {
+        const body = (await response.json()) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "QuickBooks connect failed");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   function saveBrowserKey(): void {
     setClientApiKey(apiKeyInput);
@@ -235,6 +329,7 @@ export function SettingsClient(): React.ReactElement {
     >
       {tenantError ? <p className="alert alert--error">{tenantError}</p> : null}
       {error ? <p className="alert alert--error">{error}</p> : null}
+      {message ? <p className="alert alert--success">{message}</p> : null}
 
       {needsBootstrap ? (
         <p className="alert alert--info" style={{ marginBottom: "1rem" }}>
@@ -282,6 +377,10 @@ export function SettingsClient(): React.ReactElement {
           above, and Save.
         </p>
       </section>
+
+      <DevIngestPanel tenantId={tenantId} disabled={actionLoading} />
+
+      <BulkImportPanel tenantId={tenantId} disabled={actionLoading} />
 
       <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
         <h2 className="panel__title">Create tenant API key</h2>
@@ -393,16 +492,50 @@ export function SettingsClient(): React.ReactElement {
       <section className="panel">
         <h2 className="panel__title">ERP integration</h2>
         <p className="panel__desc">
-          AUTO_TAG transactions post to the configured adapter after orchestrator persist. Sandbox
-          mock provider is default.
+          AUTO_TAG transactions post to the configured adapter. Connect QuickBooks sandbox OAuth
+          for tenant-scoped posting (set <code>ERP_PROVIDER=quickbooks_sandbox</code>).
         </p>
         <p style={{ fontSize: "0.875rem" }}>
           Provider: <strong>{erpProvider}</strong>
         </p>
-        <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", marginTop: "0.5rem" }}>
-          Set <code>ERP_PROVIDER=mock</code> in server env. QuickBooks/Xero sandbox adapters reuse mock
-          until OAuth ships.
-        </p>
+        {qbConnection ? (
+          <p className="alert alert--success" style={{ marginTop: "0.75rem" }}>
+            QuickBooks connected
+            {qbConnection.realmId ? (
+              <>
+                {" "}
+                · realm <code>{qbConnection.realmId}</code>
+              </>
+            ) : null}{" "}
+            · since {new Date(qbConnection.connectedAt).toLocaleString()}
+          </p>
+        ) : (
+          <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
+            QuickBooks not connected for this tenant.
+          </p>
+        )}
+        {!quickbooksConfigured ? (
+          <p className="alert alert--info" style={{ marginTop: "0.75rem" }}>
+            Add <code>QUICKBOOKS_CLIENT_ID</code>, <code>QUICKBOOKS_CLIENT_SECRET</code>, and{" "}
+            <code>QUICKBOOKS_REDIRECT_URI</code> to server env, then <strong>restart</strong>{" "}
+            <code>pnpm dev</code> (see <code>.env.example</code>).
+          </p>
+        ) : !tenantId ? (
+          <p className="alert alert--info" style={{ marginTop: "0.75rem" }}>
+            Select a tenant in the header, save your API key if auth is on, then connect.
+          </p>
+        ) : (
+          <div className="btn-group" style={{ marginTop: "0.75rem" }}>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={actionLoading}
+              onClick={() => void startQuickBooksConnect()}
+            >
+              Connect QuickBooks sandbox
+            </button>
+          </div>
+        )}
       </section>
     </PageLayout>
   );

@@ -66,8 +66,62 @@ jobs:
       - name: Tagging eval (deterministic)
         run: pnpm eval:tagging
 
+      - name: Eval regression gate
+        run: pnpm eval:gate
+
       - name: Production build
         run: pnpm build
 
       - name: Production config (advisory)
         run: pnpm production:check
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: quality
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cfo_capstone
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cfo_capstone"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cfo_capstone
+      LLM_ENABLE_LIVE_CALLS: "false"
+      LANGGRAPH_CHECKPOINTER: memory
+      AUTO_TAG_HITL_ENABLED: "false"
+      REQUIRE_API_AUTH: "false"
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: E2E tests
+        run: pnpm test:e2e

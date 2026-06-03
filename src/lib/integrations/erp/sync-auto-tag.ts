@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { appendEvent } from "@/lib/audit/writers";
 import type { DbClient } from "@/lib/db/client";
 import { chartOfAccounts, transactions } from "@/lib/db/schema";
-import { getErpAdapter } from "@/lib/integrations/erp/mock-adapter";
+import { getErpAdapterForTenant } from "@/lib/integrations/erp/get-erp-adapter";
 
 export interface SyncAutoTagToErpInput {
   tenantId: string;
@@ -71,7 +71,7 @@ export async function syncAutoTagToErp(
     throw new Error("GL account not found for ERP post");
   }
 
-  const adapter = getErpAdapter();
+  const adapter = await getErpAdapterForTenant(db, input.tenantId);
   const result = await adapter.postJournalEntry({
     tenantId: input.tenantId,
     transactionId: input.transactionId,

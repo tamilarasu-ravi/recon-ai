@@ -1,9 +1,15 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { assertIngestRateLimit } from "@/lib/api/apply-rate-limit";
 import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { getDb } from "@/lib/db/client";
+import { isAsyncIngestRequest } from "@/lib/orchestrator/ingest-mode";
+import {
+  queueTransactionIngest,
+  runQueuedTransactionInBackground,
+} from "@/lib/orchestrator/queue-transaction-ingest";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 
 /** Allow tagging pipeline + optional LLM on Vercel (Pro plan may be required for >10s). */
@@ -22,7 +28,8 @@ const ingestSchema = z.object({
 });
 
 /**
- * Accepts a synthetic transaction ingest payload and runs the orchestrator skeleton.
+ * Accepts a synthetic transaction ingest payload and runs (or enqueues) the tagging pipeline.
+ * Use `?async=true` or `Prefer: respond-async` for 202 + background processing.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -31,9 +38,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     await requireTenantAccess(request, parsed.tenant_id);
     assertIngestRateLimit(parsed.tenant_id, "ingest-transactions");
 
-    const db = getDb();
-
-    const result = await runTaggingPipeline(db, {
+    const input = {
       tenantId: parsed.tenant_id,
       externalTransactionId: parsed.external_transaction_id,
       transactionTimestamp: parsed.transaction_timestamp,
@@ -42,7 +47,48 @@ export async function POST(request: Request): Promise<NextResponse> {
       vendorRaw: parsed.vendor_raw,
       memo: parsed.memo,
       mcc: parsed.mcc,
-    });
+    };
+
+    if (isAsyncIngestRequest(request)) {
+      const db = getDb();
+      const queued = await queueTransactionIngest(db, input, { processingMode: "async" });
+
+      if (queued.status === "duplicate") {
+        return NextResponse.json(
+          {
+            runId: queued.runId,
+            transactionId: queued.transactionId,
+            status: "duplicate",
+            processingStatus: queued.processingStatus,
+            decision: queued.decision,
+            confidence: queued.confidence,
+            suggestedGlAccountId: queued.suggestedGlAccountId,
+          },
+          { status: 200 },
+        );
+      }
+
+      after(() =>
+        runQueuedTransactionInBackground({
+          ...input,
+          runId: queued.runId,
+          transactionId: queued.transactionId,
+        }),
+      );
+
+      return NextResponse.json(
+        {
+          runId: queued.runId,
+          transactionId: queued.transactionId,
+          status: "accepted",
+          processingStatus: queued.processingStatus ?? "pending",
+        },
+        { status: 202 },
+      );
+    }
+
+    const db = getDb();
+    const result = await runTaggingPipeline(db, input);
 
     return NextResponse.json(result, {
       status:

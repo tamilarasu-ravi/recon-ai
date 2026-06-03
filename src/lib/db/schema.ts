@@ -351,6 +351,27 @@ export const apiKeys = pgTable(
   ],
 );
 
+export const erpConnections = pgTable(
+  "erp_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    realmId: text("realm_id"),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("erp_connections_tenant_id_idx").on(table.tenantId),
+    uniqueIndex("erp_connections_tenant_provider_uidx").on(table.tenantId, table.provider),
+  ],
+);
+
 export const webhookSecrets = pgTable(
   "webhook_secrets",
   {

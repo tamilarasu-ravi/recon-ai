@@ -147,7 +147,9 @@ export default function HomePage(): React.ReactElement {
             <code>GET /api/health</code> — service status
           </li>
           <li>
-            <code>POST /api/ingest/transactions</code> — ingest &amp; run tagging graph
+            <code>POST /api/ingest/transactions</code> — ingest &amp; run tagging graph (
+            <code>?async=true</code> returns 202; poll{" "}
+            <code>GET /api/transactions/[id]/status</code>)
           </li>
           <li>
             <code>POST /api/ingest/invoices</code> — AP graph (recommend-only)

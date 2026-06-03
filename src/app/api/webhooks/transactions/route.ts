@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -7,7 +8,12 @@ import { verifyWebhookSignatureForTenant } from "@/lib/auth/webhook-secrets-admi
 import { getDb } from "@/lib/db/client";
 import { resolveTenantIdBySlug } from "@/lib/integrations/webhooks/resolve-tenant";
 import { webhookSignatureHeaderName } from "@/lib/integrations/webhooks/verify-signature";
+import {
+  queueTransactionIngest,
+  runQueuedTransactionInBackground,
+} from "@/lib/orchestrator/queue-transaction-ingest";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
+import { isAsyncWebhookIngest } from "@/lib/orchestrator/webhook-ingest-mode";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -26,7 +32,7 @@ const webhookIngestSchema = z.object({
 
 /**
  * Ingests a transaction from an external system via signed webhook (HMAC-SHA256).
- * Query: tenant_slug. Header: X-Recon-Signature t=...,v1=...
+ * Defaults to async (202) unless `?async=false`. Query: tenant_slug. Header: X-Recon-Signature.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -69,7 +75,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const parsed = webhookIngestSchema.parse(bodyJson);
 
-    const result = await runTaggingPipeline(db, {
+    const input = {
       tenantId,
       externalTransactionId: parsed.external_transaction_id,
       transactionTimestamp: parsed.transaction_timestamp,
@@ -78,7 +84,42 @@ export async function POST(request: Request): Promise<NextResponse> {
       vendorRaw: parsed.vendor_raw,
       memo: parsed.memo,
       mcc: parsed.mcc,
-    });
+    };
+
+    if (isAsyncWebhookIngest(request)) {
+      const queued = await queueTransactionIngest(db, input, { processingMode: "async" });
+
+      if (queued.status === "duplicate") {
+        return NextResponse.json(
+          {
+            ...queued,
+            source: "webhook",
+          },
+          { status: 200 },
+        );
+      }
+
+      after(() =>
+        runQueuedTransactionInBackground({
+          ...input,
+          runId: queued.runId,
+          transactionId: queued.transactionId,
+        }),
+      );
+
+      return NextResponse.json(
+        {
+          runId: queued.runId,
+          transactionId: queued.transactionId,
+          status: "accepted",
+          processingStatus: queued.processingStatus ?? "pending",
+          source: "webhook",
+        },
+        { status: 202 },
+      );
+    }
+
+    const result = await runTaggingPipeline(db, input);
 
     return NextResponse.json(
       { ...result, source: "webhook" },

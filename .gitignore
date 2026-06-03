@@ -16,6 +16,11 @@ pnpm-lock.yaml
 
 tsconfig.tsbuildinfo
 
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 data/*
 !data/README.md
 !data/kaggle-category-to-gl.json

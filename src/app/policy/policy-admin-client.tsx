@@ -25,6 +25,15 @@ export function PolicyAdminClient(): React.ReactElement {
   const [minAmount, setMinAmount] = useState("75");
   const [maxAmount, setMaxAmount] = useState("5000");
   const [mccs, setMccs] = useState("7995,7996");
+  const [nlPolicyText, setNlPolicyText] = useState(
+    "Require receipts for card purchases over $75.",
+  );
+  const [compilePreview, setCompilePreview] = useState<{
+    rule_type: string;
+    rule_config: Record<string, unknown>;
+    summary: string;
+  } | null>(null);
+  const [compileLoading, setCompileLoading] = useState(false);
 
   const loadPolicy = useCallback(async (): Promise<void> => {
     if (!tenantId) {
@@ -101,6 +110,63 @@ export function PolicyAdminClient(): React.ReactElement {
     }
   }
 
+  /**
+   * Compiles natural-language policy via LLM (preview or persist).
+   *
+   * @param persist - When true, inserts the compiled rule into the active pack.
+   */
+  async function submitCompilePolicy(persist: boolean): Promise<void> {
+    if (!tenantId) {
+      return;
+    }
+
+    setCompileLoading(true);
+    setError(null);
+    setMessage(null);
+    setCompilePreview(null);
+
+    try {
+      const response = await apiFetch("/api/policies/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          natural_language: nlPolicyText,
+          persist,
+        }),
+      });
+
+      const body = (await response.json()) as {
+        error?: string;
+        compiled?: {
+          rule_type: string;
+          rule_config: Record<string, unknown>;
+          summary: string;
+        };
+        persisted?: { ruleId: string } | null;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      }
+
+      if (body.compiled) {
+        setCompilePreview(body.compiled);
+      }
+
+      if (persist && body.persisted) {
+        setMessage("Compiled rule added to active policy pack.");
+        await loadPolicy();
+      } else {
+        setMessage("Preview ready — review below, then Add to policy pack.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Policy compile failed");
+    } finally {
+      setCompileLoading(false);
+    }
+  }
+
   async function removeRule(rule: PolicyRuleDto): Promise<void> {
     if (!tenantId) {
       return;
@@ -133,9 +199,9 @@ export function PolicyAdminClient(): React.ReactElement {
     <PageLayout
       title="Policy admin"
       subtitle="Compiled rules on the active policy pack — caps AUTO_TAG via receipt and review gates."
-      loading={loading}
-      blocking={loading}
-      blockingLabel="Updating policy…"
+      loading={loading || compileLoading}
+      blocking={loading || compileLoading}
+      blockingLabel={compileLoading ? "Compiling policy…" : "Updating policy…"}
     >
       {error ? <p className="alert alert--error">{error}</p> : null}
       {message ? <p className="alert alert--success">{message}</p> : null}
@@ -149,8 +215,57 @@ export function PolicyAdminClient(): React.ReactElement {
         <p className="alert alert--warning">No active policy — run pnpm db:seed.</p>
       )}
 
+      <section className="panel" style={{ marginBottom: "1.5rem" }}>
+        <h2 className="panel__title">Natural language compiler</h2>
+        <p className="panel__desc">
+          Describe a policy in plain English. The LLM compiles it to a deterministic rule (offline
+          admin only). Requires <code>LLM_ENABLE_LIVE_CALLS=true</code> and an API key.
+        </p>
+        <div className="form-field" style={{ marginBottom: "0.75rem" }}>
+          <label className="form-label" htmlFor="nl-policy">
+            Policy statement
+          </label>
+          <textarea
+            id="nl-policy"
+            className="input"
+            rows={3}
+            value={nlPolicyText}
+            onChange={(e) => setNlPolicyText(e.target.value)}
+            disabled={!tenantId || compileLoading}
+          />
+        </div>
+        <div className="btn-group">
+          <button
+            type="button"
+            className="btn btn--secondary"
+            disabled={!tenantId || compileLoading}
+            onClick={() => void submitCompilePolicy(false)}
+          >
+            Preview compile
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={!tenantId || compileLoading}
+            onClick={() => void submitCompilePolicy(true)}
+          >
+            Add to policy pack
+          </button>
+        </div>
+        {compilePreview ? (
+          <div style={{ marginTop: "1rem" }}>
+            <p style={{ fontSize: "0.875rem" }}>
+              <strong>{compilePreview.rule_type}</strong> — {compilePreview.summary}
+            </p>
+            <pre className="code-block" style={{ marginTop: "0.5rem" }}>
+              {JSON.stringify(compilePreview.rule_config, null, 2)}
+            </pre>
+          </div>
+        ) : null}
+      </section>
+
       <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
-        <h2 className="panel__title">Add rule</h2>
+        <h2 className="panel__title">Add rule (manual)</h2>
         <form onSubmit={(e) => void submitAddRule(e)} className="form-row">
           <div className="form-field">
             <label className="form-label" htmlFor="rule-type">
