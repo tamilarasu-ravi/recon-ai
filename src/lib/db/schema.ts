@@ -36,6 +36,7 @@ export const processingStatusEnum = pgEnum("processing_status", [
   "processing",
   "completed",
   "failed",
+  "dead_letter",
 ]);
 
 export const taggingDecisionEnum = pgEnum("tagging_decision", [
@@ -159,6 +160,9 @@ export const transactions = pgTable(
     taxCode: text("tax_code"),
     dimensions: jsonb("dimensions"),
     processingStatus: processingStatusEnum("processing_status").notNull().default("pending"),
+    processingAttemptCount: integer("processing_attempt_count").notNull().default(0),
+    processingLastError: text("processing_last_error"),
+    processingNextRetryAt: timestamp("processing_next_retry_at", { withTimezone: true }),
     erpProvider: text("erp_provider"),
     erpExternalId: text("erp_external_id"),
     erpPostedAt: timestamp("erp_posted_at", { withTimezone: true }),
@@ -167,6 +171,10 @@ export const transactions = pgTable(
   },
   (table) => [
     index("transactions_tenant_id_idx").on(table.tenantId),
+    index("transactions_processing_retry_idx").on(
+      table.processingStatus,
+      table.processingNextRetryAt,
+    ),
     index("transactions_tenant_labeled_gl_idx").on(table.tenantId, table.glAccountId),
     uniqueIndex("transactions_tenant_idempotency_uidx").on(table.tenantId, table.idempotencyKey),
     uniqueIndex("transactions_tenant_external_txn_uidx").on(

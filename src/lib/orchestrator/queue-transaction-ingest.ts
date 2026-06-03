@@ -6,8 +6,10 @@ import type { DbClient } from "@/lib/db/client";
 import { transactions } from "@/lib/db/schema";
 import type { PipelineOptions, PipelineResult, TransactionCreatedInput } from "@/lib/orchestrator/run-pipeline";
 import { processQueuedTransaction } from "@/lib/orchestrator/process-queued-transaction";
+import { recordProcessingFailure } from "@/lib/orchestrator/processing-failure";
+import type { ProcessingStatus } from "@/lib/orchestrator/processing-retry";
 
-export type ProcessingStatus = "pending" | "processing" | "completed" | "failed";
+export type { ProcessingStatus };
 
 export interface QueueTransactionResult {
   runId: string;
@@ -42,6 +44,7 @@ export async function queueTransactionIngest(
     .select({
       id: transactions.id,
       processingStatus: transactions.processingStatus,
+      processingAttemptCount: transactions.processingAttemptCount,
       taggingDecision: transactions.taggingDecision,
       confidence: transactions.confidence,
       suggestedGlAccountId: transactions.suggestedGlAccountId,
@@ -115,26 +118,24 @@ export async function runQueuedTransactionInBackground(
   const db = getDb();
   const env = loadEnv();
 
+  const attemptRows = await db
+    .select({ processingAttemptCount: transactions.processingAttemptCount })
+    .from(transactions)
+    .where(eq(transactions.id, input.transactionId))
+    .limit(1);
+
+  const currentAttemptCount = attemptRows[0]?.processingAttemptCount ?? 0;
+
   try {
     await processQueuedTransaction(db, env, input, pipelineOptions);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Tagging pipeline failed";
-    await db
-      .update(transactions)
-      .set({
-        processingStatus: "failed",
-        updatedAt: new Date(),
-      })
-      .where(eq(transactions.id, input.transactionId));
-
-    await appendEvent(db, {
+    await recordProcessingFailure(db, {
       tenantId: input.tenantId,
-      eventType: "TransactionProcessingFailed",
+      transactionId: input.transactionId,
       runId: input.runId,
-      payload: {
-        transaction_id: input.transactionId,
-        error: message,
-      },
+      errorMessage: message,
+      currentAttemptCount,
     });
   }
 }

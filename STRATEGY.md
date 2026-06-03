@@ -49,7 +49,7 @@ Feature inventory: [`docs/product-roadmap.md`](./docs/product-roadmap.md).
 
 1. **P1 Deploy & CI** — Done.
 2. **P2 Security** — Done — [`docs/security.md`](./docs/security.md).
-3. **P3 Async ops** — Done — 202 ingest, poll status, bulk CSV, Dev ingest UI.
+3. **P3 Async ops** — Done — 202 ingest, poll status, bulk CSV, retries/dead-letter, cron worker.
 4. **P4 Integrations** — In progress — async webhooks, NL policy compiler; OAuth/AP depth next.
 5. **P5 Enterprise** — In progress — Playwright E2E + eval gate in CI; SSO, RLS next.
 

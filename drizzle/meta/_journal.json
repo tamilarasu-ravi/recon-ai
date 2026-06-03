@@ -36,6 +36,13 @@
       "when": 1780600000000,
       "tag": "0004_erp_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780700000000,
+      "tag": "0005_processing_retry",
+      "breakpoints": true
     }
   ]
 }

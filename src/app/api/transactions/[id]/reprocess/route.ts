@@ -1,19 +1,30 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { getDb } from "@/lib/db/client";
-import { reprocessTransactionTagging } from "@/lib/orchestrator/reprocess-tagging";
+import { transactions } from "@/lib/db/schema";
+import { resetTransactionForReprocess } from "@/lib/orchestrator/processing-failure";
+import { runQueuedTransactionInBackground } from "@/lib/orchestrator/queue-transaction-ingest";
+import { newRunId } from "@/lib/config/env";
 
-export const maxDuration = 60;
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-const reprocessSchema = z.object({
+const querySchema = z.object({
   tenant_id: z.string().uuid(),
 });
 
+const bodySchema = z
+  .object({
+    run_immediately: z.boolean().optional(),
+  })
+  .optional();
+
 /**
- * Re-runs policy and tagging on an existing transaction (e.g. after receipt upload).
+ * Resets a transaction for another processing attempt (manual recovery / dead-letter replay).
  */
 export async function POST(
   request: Request,
@@ -21,20 +32,82 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { id: transactionId } = await context.params;
-    const body: unknown = await request.json();
-    const parsed = reprocessSchema.parse(body);
+    const url = new URL(request.url);
+    const parsed = querySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
     await requireTenantAccess(request, parsed.tenant_id);
+
+    const body: unknown =
+      request.headers.get("content-length") === "0" ? undefined : await request.json();
+    const options = bodySchema.parse(body);
 
     const db = getDb();
 
-    const result = await reprocessTransactionTagging(db, parsed.tenant_id, transactionId);
+    const rows = await db
+      .select({
+        id: transactions.id,
+        tenantId: transactions.tenantId,
+        externalTransactionId: transactions.externalTransactionId,
+        transactionTimestamp: transactions.transactionTimestamp,
+        amount: transactions.amount,
+        currency: transactions.currency,
+        vendorRaw: transactions.vendorRaw,
+        memo: transactions.memo,
+        mcc: transactions.mcc,
+        processingStatus: transactions.processingStatus,
+      })
+      .from(transactions)
+      .where(
+        and(eq(transactions.id, transactionId), eq(transactions.tenantId, parsed.tenant_id)),
+      )
+      .limit(1);
 
-    return NextResponse.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Reprocess failed";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
+    const txn = rows[0];
+    if (!txn) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
-    return toRouteErrorResponse(error, "Reprocess failed");
+
+    if (txn.processingStatus === "completed") {
+      return NextResponse.json(
+        { error: "Transaction already completed — ingest a new external_transaction_id instead" },
+        { status: 409 },
+      );
+    }
+
+    const immediate = options?.run_immediately ?? true;
+    const updated = await resetTransactionForReprocess(db, transactionId, {
+      immediate,
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: "Reprocess reset failed" }, { status: 500 });
+    }
+
+    const runId = newRunId();
+
+    if (immediate) {
+      after(() =>
+        runQueuedTransactionInBackground({
+          runId,
+          transactionId: txn.id,
+          tenantId: txn.tenantId,
+          externalTransactionId: txn.externalTransactionId,
+          transactionTimestamp: txn.transactionTimestamp.toISOString(),
+          amount: String(txn.amount),
+          currency: txn.currency,
+          vendorRaw: txn.vendorRaw,
+          memo: txn.memo ?? undefined,
+          mcc: txn.mcc ?? undefined,
+        }),
+      );
+    }
+
+    return NextResponse.json({
+      transaction_id: transactionId,
+      run_id: runId,
+      processing_status: "pending",
+      scheduled_immediately: immediate,
+    });
+  } catch (error) {
+    return toRouteErrorResponse(error, "Transaction reprocess failed");
   }
 }

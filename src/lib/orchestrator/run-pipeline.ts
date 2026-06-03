@@ -10,6 +10,7 @@ import { resumeTaggingGraph } from "@/lib/orchestrator/langgraph/tagging-graph";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
 import { processQueuedTransaction } from "@/lib/orchestrator/process-queued-transaction";
 import { queueTransactionIngest } from "@/lib/orchestrator/queue-transaction-ingest";
+import type { ProcessingStatus } from "@/lib/orchestrator/processing-retry";
 import { toAcceptedPipelineResult } from "@/lib/orchestrator/run-pipeline-result";
 
 export interface TransactionCreatedInput {
@@ -36,7 +37,7 @@ export interface PipelineResult {
   runId: string;
   transactionId: string;
   status: "accepted" | "duplicate" | "pending_approval";
-  processingStatus?: "pending" | "processing" | "completed" | "failed";
+  processingStatus?: ProcessingStatus;
   policyOutcome?: PolicyOutcome;
   policyVersion?: string;
   decision?: TaggingDecision;

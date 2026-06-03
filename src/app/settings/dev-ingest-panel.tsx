@@ -9,7 +9,12 @@ import { apiFetch } from "@/lib/ui/api-fetch";
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLL_ATTEMPTS = 40;
 
-type ProcessingStatus = "pending" | "processing" | "completed" | "failed";
+type ProcessingStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "dead_letter";
 
 interface IngestResponse {
   runId?: string;
@@ -333,7 +338,8 @@ export function DevIngestPanel({ tenantId, disabled }: DevIngestPanelProps): Rea
                 currentProcessingStatus === "pending" ||
                 currentProcessingStatus === "processing" ||
                 currentProcessingStatus === "completed" ||
-                currentProcessingStatus === "failed"
+                currentProcessingStatus === "failed" ||
+                currentProcessingStatus === "dead_letter"
                   ? "dev-ingest-steps__item--done"
                   : ""
               }
@@ -344,7 +350,8 @@ export function DevIngestPanel({ tenantId, disabled }: DevIngestPanelProps): Rea
               className={
                 currentProcessingStatus === "processing" ||
                 currentProcessingStatus === "completed" ||
-                currentProcessingStatus === "failed"
+                currentProcessingStatus === "failed" ||
+                currentProcessingStatus === "dead_letter"
                   ? "dev-ingest-steps__item--done"
                   : ""
               }
@@ -360,7 +367,9 @@ export function DevIngestPanel({ tenantId, disabled }: DevIngestPanelProps): Rea
                     : ""
               }
             >
-              {currentProcessingStatus === "failed" ? "failed" : "completed"}
+              {currentProcessingStatus === "failed" || currentProcessingStatus === "dead_letter"
+                ? currentProcessingStatus
+                : "completed"}
             </li>
           </ul>
           <p style={{ fontSize: "0.875rem", margin: "0.5rem 0 0" }}>
