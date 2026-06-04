@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
-import { getDb } from "@/lib/db/client";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { applyTransactionOverride } from "@/lib/orchestrator/apply-override";
 
 const overrideSchema = z.object({
@@ -22,18 +21,17 @@ export async function POST(
     const { id: transactionId } = await context.params;
     const body: unknown = await request.json();
     const parsed = overrideSchema.parse(body);
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const result = await applyTransactionOverride(db, {
+        tenantId: parsed.tenant_id,
+        transactionId,
+        glCode: parsed.gl_code,
+        taxCode: parsed.tax_code,
+      });
 
-    const result = await applyTransactionOverride(db, {
-      tenantId: parsed.tenant_id,
-      transactionId,
-      glCode: parsed.gl_code,
-      taxCode: parsed.tax_code,
+      return NextResponse.json(result);
     });
-
-    return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Override failed";
     if (message.includes("not found")) {

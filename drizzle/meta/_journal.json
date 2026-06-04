@@ -43,6 +43,20 @@
       "when": 1780700000000,
       "tag": "0005_processing_retry",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780800000000,
+      "tag": "0006_tenant_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780810000000,
+      "tag": "0007_recon_app_role",
+      "breakpoints": true
     }
   ]
 }

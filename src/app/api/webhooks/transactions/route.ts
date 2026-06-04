@@ -5,7 +5,7 @@ import { z } from "zod";
 import { assertWebhookRateLimit } from "@/lib/api/apply-rate-limit";
 import { toRouteErrorResponse } from "@/lib/api/tenant-auth";
 import { verifyWebhookSignatureForTenant } from "@/lib/auth/webhook-secrets-admin";
-import { getDb } from "@/lib/db/client";
+import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
 import { resolveTenantIdBySlug } from "@/lib/integrations/webhooks/resolve-tenant";
 import { webhookSignatureHeaderName } from "@/lib/integrations/webhooks/verify-signature";
 import {
@@ -30,6 +30,10 @@ const webhookIngestSchema = z.object({
   mcc: z.string().max(8).optional(),
 });
 
+type WebhookAuthResult =
+  | { ok: true; tenantId: string }
+  | { ok: false; reason: "unknown_tenant" | "invalid_signature" };
+
 /**
  * Ingests a transaction from an external system via signed webhook (HMAC-SHA256).
  * Defaults to async (202) unless `?async=false`. Query: tenant_slug. Header: X-Recon-Signature.
@@ -47,24 +51,38 @@ export async function POST(request: Request): Promise<NextResponse> {
     const rawBody = await request.text();
     const signatureHeader = request.headers.get(webhookSignatureHeaderName());
 
-    const db = getDb();
-    const tenantId = await resolveTenantIdBySlug(db, tenantSlug);
-    if (!tenantId) {
-      return NextResponse.json({ error: "Unknown tenant_slug" }, { status: 404 });
-    }
+    const authResult = await runWithRlsBypass(async (): Promise<WebhookAuthResult> => {
+      const { getDb } = await import("@/lib/db/client");
+      const db = getDb();
+      const tenantId = await resolveTenantIdBySlug(db, tenantSlug);
+      if (!tenantId) {
+        return { ok: false, reason: "unknown_tenant" };
+      }
 
-    const toleranceSec = Number(process.env.WEBHOOK_SIGNATURE_TOLERANCE_SEC ?? DEFAULT_TOLERANCE_SEC);
-    const verified = await verifyWebhookSignatureForTenant(
-      db,
-      tenantId,
-      rawBody,
-      signatureHeader,
-      Number.isFinite(toleranceSec) ? toleranceSec : DEFAULT_TOLERANCE_SEC,
-    );
+      const toleranceSec = Number(process.env.WEBHOOK_SIGNATURE_TOLERANCE_SEC ?? DEFAULT_TOLERANCE_SEC);
+      const verified = await verifyWebhookSignatureForTenant(
+        db,
+        tenantId,
+        rawBody,
+        signatureHeader,
+        Number.isFinite(toleranceSec) ? toleranceSec : DEFAULT_TOLERANCE_SEC,
+      );
 
-    if (!verified) {
+      if (!verified) {
+        return { ok: false, reason: "invalid_signature" };
+      }
+
+      return { ok: true, tenantId };
+    });
+
+    if (!authResult.ok) {
+      if (authResult.reason === "unknown_tenant") {
+        return NextResponse.json({ error: "Unknown tenant_slug" }, { status: 404 });
+      }
       return NextResponse.json({ error: "Invalid or missing webhook signature" }, { status: 401 });
     }
+
+    const tenantId = authResult.tenantId;
 
     let bodyJson: unknown;
     try {
@@ -86,52 +104,57 @@ export async function POST(request: Request): Promise<NextResponse> {
       mcc: parsed.mcc,
     };
 
-    if (isAsyncWebhookIngest(request)) {
-      const queued = await queueTransactionIngest(db, input, { processingMode: "async" });
+    return await runWithTenantRls(tenantId, async () => {
+      const { getDb } = await import("@/lib/db/client");
+      const db = getDb();
 
-      if (queued.status === "duplicate") {
+      if (isAsyncWebhookIngest(request)) {
+        const queued = await queueTransactionIngest(db, input, { processingMode: "async" });
+
+        if (queued.status === "duplicate") {
+          return NextResponse.json(
+            {
+              ...queued,
+              source: "webhook",
+            },
+            { status: 200 },
+          );
+        }
+
+        after(() =>
+          runQueuedTransactionInBackground({
+            ...input,
+            runId: queued.runId,
+            transactionId: queued.transactionId,
+          }),
+        );
+
         return NextResponse.json(
           {
-            ...queued,
+            runId: queued.runId,
+            transactionId: queued.transactionId,
+            status: "accepted",
+            processingStatus: queued.processingStatus ?? "pending",
             source: "webhook",
           },
-          { status: 200 },
+          { status: 202 },
         );
       }
 
-      after(() =>
-        runQueuedTransactionInBackground({
-          ...input,
-          runId: queued.runId,
-          transactionId: queued.transactionId,
-        }),
-      );
+      const result = await runTaggingPipeline(db, input);
 
       return NextResponse.json(
+        { ...result, source: "webhook" },
         {
-          runId: queued.runId,
-          transactionId: queued.transactionId,
-          status: "accepted",
-          processingStatus: queued.processingStatus ?? "pending",
-          source: "webhook",
+          status:
+            result.status === "duplicate"
+              ? 200
+              : result.status === "pending_approval"
+                ? 202
+                : 201,
         },
-        { status: 202 },
       );
-    }
-
-    const result = await runTaggingPipeline(db, input);
-
-    return NextResponse.json(
-      { ...result, source: "webhook" },
-      {
-        status:
-          result.status === "duplicate"
-            ? 200
-            : result.status === "pending_approval"
-              ? 202
-              : 201,
-      },
-    );
+    });
   } catch (error) {
     return toRouteErrorResponse(error, "Webhook ingest failed");
   }

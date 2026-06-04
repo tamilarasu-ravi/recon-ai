@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isAuthorizedCronRequest } from "@/lib/api/cron-auth";
 import { getDb } from "@/lib/db/client";
+import { runWithRlsBypass } from "@/lib/db/tenant-rls";
 import { drainPendingTransactions } from "@/lib/orchestrator/drain-pending-transactions";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +21,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   const batchParam = url.searchParams.get("batch_size");
   const batchSize = batchParam ? Number.parseInt(batchParam, 10) : undefined;
 
-  const db = getDb();
-  const result = await drainPendingTransactions(db, {
-    batchSize: Number.isFinite(batchSize) && batchSize! > 0 ? batchSize : undefined,
+  const result = await runWithRlsBypass(async () => {
+    const db = getDb();
+    return drainPendingTransactions(db, {
+      batchSize: Number.isFinite(batchSize) && batchSize! > 0 ? batchSize : undefined,
+    });
   });
 
   return NextResponse.json({

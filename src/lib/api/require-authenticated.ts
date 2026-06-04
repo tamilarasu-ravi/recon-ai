@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { authorizeApiRequest } from "@/lib/auth/api-auth";
 import type { ApiAuthContext } from "@/lib/auth/api-auth";
 import { getDb } from "@/lib/db/client";
+import { runWithRlsBypass } from "@/lib/db/tenant-rls";
 import { tenants } from "@/lib/db/schema";
 
 /**
@@ -15,8 +16,10 @@ import { tenants } from "@/lib/db/schema";
 export async function requireAuthenticatedApi(
   request: Request,
 ): Promise<ApiAuthContext | null> {
-  const db = getDb();
-  return authorizeApiRequest(db, request);
+  return runWithRlsBypass(async () => {
+    const db = getDb();
+    return authorizeApiRequest(db, request);
+  });
 }
 
 /**
@@ -29,18 +32,20 @@ export async function requireAuthenticatedApi(
 export async function listTenantsForCaller(
   request: Request,
 ): Promise<Array<{ id: string; slug: string; name: string }>> {
-  const db = getDb();
-  const auth = await requireAuthenticatedApi(request);
+  return runWithRlsBypass(async () => {
+    const db = getDb();
+    const auth = await authorizeApiRequest(db, request);
 
-  if (auth) {
-    const rows = await db
-      .select({ id: tenants.id, slug: tenants.slug, name: tenants.name })
-      .from(tenants)
-      .where(eq(tenants.id, auth.tenantId))
-      .limit(1);
+    if (auth) {
+      const rows = await db
+        .select({ id: tenants.id, slug: tenants.slug, name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, auth.tenantId))
+        .limit(1);
 
-    return rows;
-  }
+      return rows;
+    }
 
-  return db.select({ id: tenants.id, slug: tenants.slug, name: tenants.name }).from(tenants);
+    return db.select({ id: tenants.id, slug: tenants.slug, name: tenants.name }).from(tenants);
+  });
 }

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
-import { getDb } from "@/lib/db/client";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { resumeAutoTagApproval } from "@/lib/orchestrator/run-pipeline";
 
 export const maxDuration = 60;
@@ -25,19 +24,18 @@ export async function POST(
     const { id: transactionId } = await context.params;
     const body: unknown = await request.json();
     const parsed = approveSchema.parse(body);
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const result = await resumeAutoTagApproval(
+        db,
+        parsed.tenant_id,
+        transactionId,
+        parsed.run_id,
+        parsed.approved,
+      );
 
-    const result = await resumeAutoTagApproval(
-      db,
-      parsed.tenant_id,
-      transactionId,
-      parsed.run_id,
-      parsed.approved,
-    );
-
-    return NextResponse.json(result);
+      return NextResponse.json(result);
+    });
   } catch (error) {
     return toRouteErrorResponse(error, "Approve failed");
   }

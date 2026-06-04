@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { createPolicyRule } from "@/lib/data/policy-admin";
-import { getDb } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 
@@ -20,16 +19,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
     const parsed = createSchema.parse(body);
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
-    const rule = await createPolicyRule(db, {
-      tenantId: parsed.tenant_id,
-      ruleType: parsed.rule_type,
-      ruleConfig: parsed.rule_config,
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const rule = await createPolicyRule(db, {
+        tenantId: parsed.tenant_id,
+        ruleType: parsed.rule_type,
+        ruleConfig: parsed.rule_config,
+      });
+
+      return NextResponse.json({ rule }, { status: 201 });
     });
-
-    return NextResponse.json({ rule }, { status: 201 });
   } catch (error) {
     return toRouteErrorResponse(error, "Policy rule create failed");
   }

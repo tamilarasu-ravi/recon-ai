@@ -5,6 +5,7 @@ import { deriveIdempotencyKey, loadEnv, newRunId } from "@/lib/config/env";
 import type { DbClient } from "@/lib/db/client";
 import { transactions } from "@/lib/db/schema";
 import type { PipelineOptions, PipelineResult, TransactionCreatedInput } from "@/lib/orchestrator/run-pipeline";
+import { runWithTenantRls } from "@/lib/db/tenant-rls";
 import { processQueuedTransaction } from "@/lib/orchestrator/process-queued-transaction";
 import { recordProcessingFailure } from "@/lib/orchestrator/processing-failure";
 import type { ProcessingStatus } from "@/lib/orchestrator/processing-retry";
@@ -114,28 +115,30 @@ export async function runQueuedTransactionInBackground(
   input: TransactionCreatedInput & { runId: string; transactionId: string },
   pipelineOptions?: PipelineOptions,
 ): Promise<void> {
-  const { getDb } = await import("@/lib/db/client");
-  const db = getDb();
-  const env = loadEnv();
+  await runWithTenantRls(input.tenantId, async () => {
+    const { getDb } = await import("@/lib/db/client");
+    const db = getDb();
+    const env = loadEnv();
 
-  const attemptRows = await db
-    .select({ processingAttemptCount: transactions.processingAttemptCount })
-    .from(transactions)
-    .where(eq(transactions.id, input.transactionId))
-    .limit(1);
+    const attemptRows = await db
+      .select({ processingAttemptCount: transactions.processingAttemptCount })
+      .from(transactions)
+      .where(eq(transactions.id, input.transactionId))
+      .limit(1);
 
-  const currentAttemptCount = attemptRows[0]?.processingAttemptCount ?? 0;
+    const currentAttemptCount = attemptRows[0]?.processingAttemptCount ?? 0;
 
-  try {
-    await processQueuedTransaction(db, env, input, pipelineOptions);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Tagging pipeline failed";
-    await recordProcessingFailure(db, {
-      tenantId: input.tenantId,
-      transactionId: input.transactionId,
-      runId: input.runId,
-      errorMessage: message,
-      currentAttemptCount,
-    });
-  }
+    try {
+      await processQueuedTransaction(db, env, input, pipelineOptions);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Tagging pipeline failed";
+      await recordProcessingFailure(db, {
+        tenantId: input.tenantId,
+        transactionId: input.transactionId,
+        runId: input.runId,
+        errorMessage: message,
+        currentAttemptCount,
+      });
+    }
+  });
 }

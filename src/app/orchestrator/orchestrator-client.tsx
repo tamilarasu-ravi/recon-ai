@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { MermaidDiagram } from "@/app/components/mermaid-diagram";
 import { PageLayout } from "@/app/components/page-layout";
+import { apiFetch } from "@/lib/ui/api-fetch";
 
 interface WorkflowMeta {
   id: string;
@@ -43,9 +44,15 @@ export function OrchestratorClient(): React.ReactElement {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/orchestrator/graph");
+        const response = await apiFetch("/api/orchestrator/graph");
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          if (response.status === 401) {
+            throw new Error(
+              "API key required — open Settings, select a tenant, and save or generate a key.",
+            );
+          }
+          const body = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error ?? `HTTP ${response.status}`);
         }
         setData((await response.json()) as OrchestratorGraphResponse);
       } catch (err) {

@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { and, eq, like, not } from "drizzle-orm";
 import { loadEnv } from "@/lib/config/env";
-import { createDb } from "@/lib/db/client";
+import { getDb, getRootDb } from "@/lib/db/client";
+import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
 import { closeCliResources, runCliScript } from "./lib/close-cli-resources.js";
 import type { DbClient } from "@/lib/db/client";
 import { auditLog, chartOfAccounts, tenants, transactions, vendorRules, vendors } from "@/lib/db/schema";
@@ -117,26 +118,9 @@ function loadEvalCases(filePath: string): EvalCase[] {
  */
 async function main(): Promise<void> {
   const env = loadEnv();
-  const db = createDb();
-  const removed = await cleanupEvalTransactions(db);
-  if (removed > 0) {
-    console.log(`Cleared ${removed} prior eval transaction(s) for a fresh run`);
-  }
-  const rulesRemoved = await cleanupDemoLearnedVendorState(db);
-  if (rulesRemoved > 0) {
-    console.log(`Cleared ${rulesRemoved} demo-learned vendor rule(s) for reproducible eval`);
-  }
+  getRootDb();
+
   const cases = loadEvalCases(EVAL_FILE);
-
-  const tenantRows = await db.select().from(tenants);
-  const tenantBySlug = new Map(tenantRows.map((row) => [row.slug, row.id]));
-
-  const coaRows = await db.select().from(chartOfAccounts);
-  const coaCodeByTenantGl = new Map<string, string>();
-  for (const row of coaRows) {
-    coaCodeByTenantGl.set(`${row.tenantId}:${row.glCode}`, row.id);
-  }
-
   const results: EvalCaseResult[] = [];
   let autoTagTotal = 0;
   let autoTagCorrect = 0;
@@ -146,94 +130,114 @@ async function main(): Promise<void> {
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
 
-  console.log(
-    `Running ${cases.length} eval case(s) (live LLM=${env.LLM_ENABLE_LIVE_CALLS}) — this may take a few minutes…`,
-  );
-
-  for (let caseIndex = 0; caseIndex < cases.length; caseIndex += 1) {
-    const evalCase = cases[caseIndex]!;
-    const tenantId = tenantBySlug.get(evalCase.tenant_slug);
-    if (!tenantId) {
-      throw new Error(`Unknown tenant_slug in eval case ${evalCase.id}: ${evalCase.tenant_slug}`);
+  await runWithRlsBypass(async () => {
+    const db = getDb();
+    const removed = await cleanupEvalTransactions(db);
+    if (removed > 0) {
+      console.log(`Cleared ${removed} prior eval transaction(s) for a fresh run`);
+    }
+    const rulesRemoved = await cleanupDemoLearnedVendorState(db);
+    if (rulesRemoved > 0) {
+      console.log(`Cleared ${rulesRemoved} demo-learned vendor rule(s) for reproducible eval`);
     }
 
-    const externalId = `eval-${evalCase.id}`;
-    const timestamp = "2026-01-01T00:00:00.000Z";
-    process.stdout.write(
-      `  [${caseIndex + 1}/${cases.length}] ${evalCase.id} … `,
-    );
+    const tenantRows = await db.select().from(tenants);
+    const tenantBySlug = new Map(tenantRows.map((row) => [row.slug, row.id]));
 
-    const pipelineResult = await runTaggingPipeline(
-      db,
-      {
-        tenantId,
-        externalTransactionId: externalId,
-        transactionTimestamp: timestamp,
-        amount: evalCase.amount,
-        currency: "USD",
-        vendorRaw: evalCase.vendor_raw,
-        memo: evalCase.memo,
-      },
-      { skipPolicy: true, skipHitl: true },
-    );
+    const coaRows = await db.select().from(chartOfAccounts);
 
-    const actualDecision = pipelineResult.decision ?? "REFUSE";
-    let actualGlCode: string | undefined;
-    if (pipelineResult.suggestedGlAccountId) {
-      const coaRow = coaRows.find((row) => row.id === pipelineResult.suggestedGlAccountId);
-      actualGlCode = coaRow?.glCode;
-    }
-
-    const decisionPass = actualDecision === evalCase.expected_decision;
-    const glPass =
-      evalCase.expected_gl_code === undefined || actualGlCode === evalCase.expected_gl_code;
-    const passed = decisionPass && glPass;
-
-    if (evalCase.expected_decision === "AUTO_TAG") {
-      autoTagTotal += 1;
-      if (passed) {
-        autoTagCorrect += 1;
-      }
-    }
-
-    if (evalCase.vendor_raw.toLowerCase().includes("aws") && actualDecision === "AUTO_TAG") {
-      llmCallsSavedByRules += 1;
-    }
-
-    if (actualDecision !== "REFUSE") {
-      retrievalHits += 1;
-    }
-
-    const [taggingAudit] = await db
-      .select({ observability: auditLog.observability })
-      .from(auditLog)
-      .where(and(eq(auditLog.runId, pipelineResult.runId), eq(auditLog.agent, "tagging")))
-      .limit(1);
-
-    if (taggingAudit?.observability && typeof taggingAudit.observability === "object") {
-      const usage = parseLlmUsageFromObservability(
-        taggingAudit.observability as Record<string, unknown>,
-      );
-      totalCostUsd += usage.costUsd;
-      totalPromptTokens += usage.promptTokens;
-      totalCompletionTokens += usage.completionTokens;
-    }
-
-    results.push({
-      id: evalCase.id,
-      expected_decision: evalCase.expected_decision,
-      actual_decision: actualDecision,
-      passed,
-      expected_gl_code: evalCase.expected_gl_code,
-      actual_gl_code: actualGlCode,
-      notes: evalCase.notes,
-    });
-
-    const status = passed ? "pass" : "FAIL";
     console.log(
-      `${actualDecision}${actualGlCode ? ` → ${actualGlCode}` : ""} (${status}, expected ${evalCase.expected_decision})`,
+      `Running ${cases.length} eval case(s) (live LLM=${env.LLM_ENABLE_LIVE_CALLS}) — this may take a few minutes…`,
     );
-  }
+
+    for (let caseIndex = 0; caseIndex < cases.length; caseIndex += 1) {
+      const evalCase = cases[caseIndex]!;
+      const tenantId = tenantBySlug.get(evalCase.tenant_slug);
+      if (!tenantId) {
+        throw new Error(`Unknown tenant_slug in eval case ${evalCase.id}: ${evalCase.tenant_slug}`);
+      }
+
+      const externalId = `eval-${evalCase.id}`;
+      const timestamp = "2026-01-01T00:00:00.000Z";
+      process.stdout.write(
+        `  [${caseIndex + 1}/${cases.length}] ${evalCase.id} … `,
+      );
+
+      await runWithTenantRls(tenantId, async () => {
+        const scopedDb = getDb();
+        const pipelineResult = await runTaggingPipeline(
+          scopedDb,
+          {
+            tenantId,
+            externalTransactionId: externalId,
+            transactionTimestamp: timestamp,
+            amount: evalCase.amount,
+            currency: "USD",
+            vendorRaw: evalCase.vendor_raw,
+            memo: evalCase.memo,
+          },
+          { skipPolicy: true, skipHitl: true },
+        );
+
+        const actualDecision = pipelineResult.decision ?? "REFUSE";
+        let actualGlCode: string | undefined;
+        if (pipelineResult.suggestedGlAccountId) {
+          const coaRow = coaRows.find((row) => row.id === pipelineResult.suggestedGlAccountId);
+          actualGlCode = coaRow?.glCode;
+        }
+
+        const decisionPass = actualDecision === evalCase.expected_decision;
+        const glPass =
+          evalCase.expected_gl_code === undefined || actualGlCode === evalCase.expected_gl_code;
+        const passed = decisionPass && glPass;
+
+        if (evalCase.expected_decision === "AUTO_TAG") {
+          autoTagTotal += 1;
+          if (passed) {
+            autoTagCorrect += 1;
+          }
+        }
+
+        if (evalCase.vendor_raw.toLowerCase().includes("aws") && actualDecision === "AUTO_TAG") {
+          llmCallsSavedByRules += 1;
+        }
+
+        if (actualDecision !== "REFUSE") {
+          retrievalHits += 1;
+        }
+
+        const [taggingAudit] = await scopedDb
+          .select({ observability: auditLog.observability })
+          .from(auditLog)
+          .where(and(eq(auditLog.runId, pipelineResult.runId), eq(auditLog.agent, "tagging")))
+          .limit(1);
+
+        if (taggingAudit?.observability && typeof taggingAudit.observability === "object") {
+          const usage = parseLlmUsageFromObservability(
+            taggingAudit.observability as Record<string, unknown>,
+          );
+          totalCostUsd += usage.costUsd;
+          totalPromptTokens += usage.promptTokens;
+          totalCompletionTokens += usage.completionTokens;
+        }
+
+        results.push({
+          id: evalCase.id,
+          expected_decision: evalCase.expected_decision,
+          actual_decision: actualDecision,
+          passed,
+          expected_gl_code: evalCase.expected_gl_code,
+          actual_gl_code: actualGlCode,
+          notes: evalCase.notes,
+        });
+
+        const status = passed ? "pass" : "FAIL";
+        console.log(
+          `${actualDecision}${actualGlCode ? ` → ${actualGlCode}` : ""} (${status}, expected ${evalCase.expected_decision})`,
+        );
+      });
+    }
+  });
 
   const precision = autoTagTotal > 0 ? autoTagCorrect / autoTagTotal : 1;
   const reviewRate =

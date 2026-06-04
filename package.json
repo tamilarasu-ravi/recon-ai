@@ -28,7 +28,7 @@
     "mcp": "tsx src/mcp/server.ts",
     "graph:diagram": "tsx scripts/export-graph-diagram.ts",
     "db:setup-checkpointer": "tsx scripts/setup-langgraph-checkpointer.ts",
-    "test": "LANGGRAPH_CHECKPOINTER=memory AUTO_TAG_HITL_ENABLED=false node --import tsx --test tests/unit/**/*.test.ts",
+    "test": "LANGGRAPH_CHECKPOINTER=memory AUTO_TAG_HITL_ENABLED=false node --import tsx --test tests/unit/**/*.test.ts tests/integration/**/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "playwright:install": "playwright install chromium"

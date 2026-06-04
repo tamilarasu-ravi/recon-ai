@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { assertIngestRateLimit } from "@/lib/api/apply-rate-limit";
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
-import { getDb } from "@/lib/db/client";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { runApPipeline } from "@/lib/orchestrator/run-ap-pipeline";
 
 export const maxDuration = 30;
@@ -25,21 +24,20 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
     const parsed = ingestInvoiceSchema.parse(body);
-    await requireTenantAccess(request, parsed.tenant_id);
     assertIngestRateLimit(parsed.tenant_id, "ingest-invoices");
 
-    const db = getDb();
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const result = await runApPipeline(db, {
+        tenantId: parsed.tenant_id,
+        externalInvoiceId: parsed.external_invoice_id,
+        vendorRaw: parsed.vendor_raw,
+        amount: parsed.amount,
+        currency: parsed.currency,
+        invoiceDate: parsed.invoice_date,
+      });
 
-    const result = await runApPipeline(db, {
-      tenantId: parsed.tenant_id,
-      externalInvoiceId: parsed.external_invoice_id,
-      vendorRaw: parsed.vendor_raw,
-      amount: parsed.amount,
-      currency: parsed.currency,
-      invoiceDate: parsed.invoice_date,
+      return NextResponse.json(result, { status: result.status === "duplicate" ? 409 : 201 });
     });
-
-    return NextResponse.json(result, { status: result.status === "duplicate" ? 409 : 201 });
   } catch (error) {
     return toRouteErrorResponse(error, "Invoice ingest failed");
   }

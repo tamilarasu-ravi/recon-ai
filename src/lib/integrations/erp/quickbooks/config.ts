@@ -1,7 +1,8 @@
+import { QUICKBOOKS_TOKEN_URL } from "@/lib/integrations/erp/quickbooks/constants";
+
 export const QUICKBOOKS_PROVIDER_ID = "quickbooks_sandbox" as const;
 
 const QUICKBOOKS_AUTH_URL = "https://appcenter.intuit.com/connect/oauth2";
-const QUICKBOOKS_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 const QUICKBOOKS_SCOPE = "com.intuit.quickbooks.accounting";
 
 export interface QuickBooksConfig {

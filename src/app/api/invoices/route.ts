@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { listApInvoicesForTenant } from "@/lib/data/ap-invoice-list";
-import { getDb } from "@/lib/db/client";
 import { runApPipeline } from "@/lib/orchestrator/run-ap-pipeline";
 
 export const dynamic = "force-dynamic";
@@ -28,12 +27,11 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     const url = new URL(request.url);
     const parsed = listQuerySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
-    const items = await listApInvoicesForTenant(db, parsed.tenant_id);
-
-    return NextResponse.json({ items });
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const items = await listApInvoicesForTenant(db, parsed.tenant_id);
+      return NextResponse.json({ items });
+    });
   } catch (error) {
     return toRouteErrorResponse(error, "Invoice list failed");
   }
@@ -46,19 +44,19 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
     const parsed = ingestInvoiceSchema.parse(body);
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
-    const result = await runApPipeline(db, {
-      tenantId: parsed.tenant_id,
-      externalInvoiceId: parsed.external_invoice_id,
-      vendorRaw: parsed.vendor_raw,
-      amount: parsed.amount,
-      currency: parsed.currency,
-      invoiceDate: parsed.invoice_date,
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const result = await runApPipeline(db, {
+        tenantId: parsed.tenant_id,
+        externalInvoiceId: parsed.external_invoice_id,
+        vendorRaw: parsed.vendor_raw,
+        amount: parsed.amount,
+        currency: parsed.currency,
+        invoiceDate: parsed.invoice_date,
+      });
+
+      return NextResponse.json(result, { status: result.status === "duplicate" ? 409 : 201 });
     });
-
-    return NextResponse.json(result, { status: result.status === "duplicate" ? 409 : 201 });
   } catch (error) {
     return toRouteErrorResponse(error, "Invoice ingest failed");
   }

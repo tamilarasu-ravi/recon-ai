@@ -2,8 +2,7 @@ import { and, eq, gt, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
-import { getDb } from "@/lib/db/client";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { transactions } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
@@ -23,47 +22,46 @@ export async function GET(request: Request): Promise<NextResponse> {
       tenant_id: url.searchParams.get("tenant_id"),
       limit: url.searchParams.get("limit") ?? undefined,
     });
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
-
-    const rows = await db
-      .select({
-        id: transactions.id,
-        externalTransactionId: transactions.externalTransactionId,
-        processingStatus: transactions.processingStatus,
-        processingAttemptCount: transactions.processingAttemptCount,
-        processingLastError: transactions.processingLastError,
-        processingNextRetryAt: transactions.processingNextRetryAt,
-        updatedAt: transactions.updatedAt,
-      })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.tenantId, parsed.tenant_id),
-          or(
-            eq(transactions.processingStatus, "dead_letter"),
-            and(
-              eq(transactions.processingStatus, "pending"),
-              gt(transactions.processingAttemptCount, 0),
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const rows = await db
+        .select({
+          id: transactions.id,
+          externalTransactionId: transactions.externalTransactionId,
+          processingStatus: transactions.processingStatus,
+          processingAttemptCount: transactions.processingAttemptCount,
+          processingLastError: transactions.processingLastError,
+          processingNextRetryAt: transactions.processingNextRetryAt,
+          updatedAt: transactions.updatedAt,
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.tenantId, parsed.tenant_id),
+            or(
+              eq(transactions.processingStatus, "dead_letter"),
+              and(
+                eq(transactions.processingStatus, "pending"),
+                gt(transactions.processingAttemptCount, 0),
+              ),
             ),
           ),
-        ),
-      )
-      .limit(parsed.limit);
+        )
+        .limit(parsed.limit);
 
-    return NextResponse.json({
-      tenant_id: parsed.tenant_id,
-      count: rows.length,
-      transactions: rows.map((row) => ({
-        transaction_id: row.id,
-        external_transaction_id: row.externalTransactionId,
-        processing_status: row.processingStatus,
-        attempt_count: row.processingAttemptCount,
-        last_error: row.processingLastError,
-        next_retry_at: row.processingNextRetryAt?.toISOString() ?? null,
-        updated_at: row.updatedAt.toISOString(),
-      })),
+      return NextResponse.json({
+        tenant_id: parsed.tenant_id,
+        count: rows.length,
+        transactions: rows.map((row) => ({
+          transaction_id: row.id,
+          external_transaction_id: row.externalTransactionId,
+          processing_status: row.processingStatus,
+          attempt_count: row.processingAttemptCount,
+          last_error: row.processingLastError,
+          next_retry_at: row.processingNextRetryAt?.toISOString() ?? null,
+          updated_at: row.updatedAt.toISOString(),
+        })),
+      });
     });
   } catch (error) {
     return toRouteErrorResponse(error, "Processing failures fetch failed");

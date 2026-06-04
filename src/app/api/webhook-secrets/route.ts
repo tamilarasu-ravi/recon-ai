@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import {
   createWebhookSecretForTenant,
   listWebhookSecretsForTenant,
 } from "@/lib/auth/webhook-secrets-admin";
-import { getDb } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +25,11 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     const url = new URL(request.url);
     const parsed = querySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
-    const secrets = await listWebhookSecretsForTenant(db, parsed.tenant_id);
-
-    return NextResponse.json({ secrets });
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const secrets = await listWebhookSecretsForTenant(db, parsed.tenant_id);
+      return NextResponse.json({ secrets });
+    });
   } catch (error) {
     return toRouteErrorResponse(error, "Webhook secret list failed");
   }
@@ -44,24 +42,24 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
     const parsed = createSchema.parse(body);
-    await requireTenantAccess(request, parsed.tenant_id);
 
-    const db = getDb();
-    const created = await createWebhookSecretForTenant(db, parsed.tenant_id, parsed.name);
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+      const created = await createWebhookSecretForTenant(db, parsed.tenant_id, parsed.name);
 
-    return NextResponse.json(
-      {
-        secret: {
-          id: created.id,
-          name: created.name,
-          secretPrefix: created.secretPrefix,
-          isActive: created.isActive,
-          createdAt: created.createdAt,
+      return NextResponse.json(
+        {
+          secret: {
+            id: created.id,
+            name: created.name,
+            secretPrefix: created.secretPrefix,
+            isActive: created.isActive,
+            createdAt: created.createdAt,
+          },
+          raw_secret: created.rawSecret,
         },
-        raw_secret: created.rawSecret,
-      },
-      { status: 201 },
-    );
+        { status: 201 },
+      );
+    });
   } catch (error) {
     return toRouteErrorResponse(error, "Webhook secret create failed");
   }

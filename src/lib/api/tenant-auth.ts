@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { assertTenantScope, authorizeApiRequest } from "@/lib/auth/api-auth";
 import type { ApiAuthContext } from "@/lib/auth/api-auth";
 import { assertTenantApiRateLimit } from "@/lib/api/apply-rate-limit";
-import { getDb } from "@/lib/db/client";
+import type { DbClient } from "@/lib/db/client";
+import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
 import { RateLimitExceededError } from "@/lib/security/rate-limit";
 
 /**
@@ -18,11 +19,33 @@ export async function requireTenantAccess(
   request: Request,
   tenantId: string,
 ): Promise<ApiAuthContext | null> {
-  const db = getDb();
-  const auth = await authorizeApiRequest(db, request);
-  assertTenantScope(auth, tenantId);
-  assertTenantApiRateLimit(tenantId, "tenant-api");
-  return auth;
+  return runWithRlsBypass(async () => {
+    const { getDb } = await import("@/lib/db/client");
+    const auth = await authorizeApiRequest(getDb(), request);
+    assertTenantScope(auth, tenantId);
+    assertTenantApiRateLimit(tenantId, "tenant-api");
+    return auth;
+  });
+}
+
+/**
+ * Authorizes the request and runs handler work inside a tenant-scoped RLS transaction.
+ *
+ * @param request - Incoming HTTP request.
+ * @param tenantId - Tenant id from query or body.
+ * @param handler - Route logic using getDb() within the RLS scope.
+ * @returns Handler result.
+ */
+export async function withTenantAccess<T>(
+  request: Request,
+  tenantId: string,
+  handler: (db: DbClient, auth: ApiAuthContext | null) => Promise<T>,
+): Promise<T> {
+  const auth = await requireTenantAccess(request, tenantId);
+  return runWithTenantRls(tenantId, async () => {
+    const { getDb } = await import("@/lib/db/client");
+    return handler(getDb(), auth);
+  });
 }
 
 /**

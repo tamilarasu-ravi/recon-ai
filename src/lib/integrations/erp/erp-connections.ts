@@ -28,6 +28,7 @@ export async function getErpConnection(
   realmId: string | null;
   accessToken: string;
   refreshToken: string | null;
+  accessTokenExpiresAt: Date | null;
 } | null> {
   const rows = await db
     .select({
@@ -35,6 +36,7 @@ export async function getErpConnection(
       realmId: erpConnections.realmId,
       accessToken: erpConnections.accessToken,
       refreshToken: erpConnections.refreshToken,
+      accessTokenExpiresAt: erpConnections.accessTokenExpiresAt,
     })
     .from(erpConnections)
     .where(and(eq(erpConnections.tenantId, tenantId), eq(erpConnections.provider, provider)))

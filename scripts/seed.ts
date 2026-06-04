@@ -11,7 +11,8 @@ import { seedTenantPolicyPack } from "@/lib/agents/policy/seed-policies";
 import { seedApiKeyForTenant } from "@/lib/auth/seed-api-keys";
 import { seedWebhookSecretForTenant } from "@/lib/auth/seed-webhook-secrets";
 import { hasProviderApiKey, loadEnv } from "@/lib/config/env";
-import { createDb } from "@/lib/db/client";
+import { getDb, getRootDb } from "@/lib/db/client";
+import { runWithRlsBypass } from "@/lib/db/tenant-rls";
 import { runCliScript } from "./lib/close-cli-resources.js";
 import {
   chartOfAccounts,
@@ -95,7 +96,7 @@ const TENANT_SEED = [
  * @throws Error when database operations fail.
  */
 async function main(): Promise<void> {
-  const db = createDb();
+  getRootDb();
   const env = loadEnv();
   const useLiveEmbeddings = env.LLM_ENABLE_LIVE_CALLS && hasProviderApiKey(env);
 
@@ -106,6 +107,9 @@ async function main(): Promise<void> {
   } else {
     console.log(`Seed: using live embeddings via LLM_PROVIDER=${env.LLM_PROVIDER}`);
   }
+
+  await runWithRlsBypass(async () => {
+    const db = getDb();
 
   for (const tenantSeed of TENANT_SEED) {
     const existing = await db.select().from(tenants).where(eq(tenants.slug, tenantSeed.slug)).limit(1);
@@ -251,6 +255,7 @@ async function main(): Promise<void> {
   }
 
   console.log("Seed complete.");
+  });
 }
 
 runCliScript(main);

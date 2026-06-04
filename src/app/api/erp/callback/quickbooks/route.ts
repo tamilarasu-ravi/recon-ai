@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getDb } from "@/lib/db/client";
+import { runWithTenantRls } from "@/lib/db/tenant-rls";
 import { upsertQuickBooksConnection } from "@/lib/integrations/erp/erp-connections";
 import {
   exchangeQuickBooksAuthCode,
@@ -42,12 +42,15 @@ export async function GET(request: Request): Promise<NextResponse> {
     const payload = verifyQuickBooksOAuthState(state, config.clientSecret);
     const tokens = await exchangeQuickBooksAuthCode(config, code);
 
-    const db = getDb();
-    await upsertQuickBooksConnection(db, payload.tenantId, {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresInSec: tokens.expires_in,
-      realmId,
+    await runWithTenantRls(payload.tenantId, async () => {
+      const { getDb } = await import("@/lib/db/client");
+      const db = getDb();
+      await upsertQuickBooksConnection(db, payload.tenantId, {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresInSec: tokens.expires_in,
+        realmId,
+      });
     });
 
     settingsUrl.searchParams.set("qb", "connected");

@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { assertIngestRateLimit } from "@/lib/api/apply-rate-limit";
-import { requireTenantAccess, toRouteErrorResponse } from "@/lib/api/tenant-auth";
-import { getDb } from "@/lib/db/client";
+import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { isAsyncIngestRequest } from "@/lib/orchestrator/ingest-mode";
 import {
   queueTransactionIngest,
@@ -35,9 +34,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
     const parsed = ingestSchema.parse(body);
-    await requireTenantAccess(request, parsed.tenant_id);
     assertIngestRateLimit(parsed.tenant_id, "ingest-transactions");
 
+    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
     const input = {
       tenantId: parsed.tenant_id,
       externalTransactionId: parsed.external_transaction_id,
@@ -50,7 +49,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     };
 
     if (isAsyncIngestRequest(request)) {
-      const db = getDb();
       const queued = await queueTransactionIngest(db, input, { processingMode: "async" });
 
       if (queued.status === "duplicate") {
@@ -87,7 +85,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const db = getDb();
     const result = await runTaggingPipeline(db, input);
 
     return NextResponse.json(result, {
@@ -97,6 +94,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           : result.status === "pending_approval"
             ? 202
             : 201,
+    });
     });
   } catch (error) {
     return toRouteErrorResponse(error, "Ingest failed");
