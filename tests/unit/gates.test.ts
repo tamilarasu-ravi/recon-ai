@@ -18,10 +18,10 @@ describe("hasUnknownVendorSignal", () => {
 });
 
 describe("applyTriStateGate", () => {
-  it("REFUSEs unknown vendor pattern without rule hit", () => {
+  it("REFUSEs unknown vendor pattern even when a vendor rule matched", () => {
     const result = applyTriStateGate({
       confidence: 0.99,
-      ruleHit: false,
+      ruleHit: true,
       supportCount: 5,
       top1Sim: 0.9,
       isNewVendor: true,
@@ -35,6 +35,25 @@ describe("applyTriStateGate", () => {
     });
     assert.equal(result.decision, "REFUSE");
     assert.equal(result.reason, "unknown_vendor_pattern");
+  });
+
+  it("QUEUE_REVIEWs new vendor with weak retrieval but moderate confidence", () => {
+    const result = applyTriStateGate({
+      confidence: 0.65,
+      ruleHit: false,
+      supportCount: 0,
+      top1Sim: 0.4,
+      isNewVendor: true,
+      glInCoa: true,
+      parseFailed: false,
+      promptInjectionDetected: false,
+      reviewOnlyGl: false,
+      receiptRequiredAndNotCleared: false,
+      unknownVendorSignal: false,
+      env: mockEnv,
+    });
+    assert.equal(result.decision, "QUEUE_REVIEW");
+    assert.equal(result.reason, "new_vendor");
   });
 
   it("QUEUE_REVIEWs on prompt injection", () => {

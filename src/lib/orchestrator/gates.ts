@@ -37,7 +37,8 @@ export function applyTriStateGate(input: TriStateGateInput): TriStateGateResult 
     return { decision: "QUEUE_REVIEW", reason: "prompt_injection_guard" };
   }
 
-  if (input.unknownVendorSignal && !input.ruleHit) {
+  // Explicit unknown/mystery vendors must never AUTO_TAG — rules cannot override.
+  if (input.unknownVendorSignal) {
     return { decision: "REFUSE", reason: "unknown_vendor_pattern" };
   }
 
@@ -66,7 +67,8 @@ export function applyTriStateGate(input: TriStateGateInput): TriStateGateResult 
 
   if (input.isNewVendor && !input.ruleHit) {
     const weakRetrieval = input.top1Sim < 0.55 && input.supportCount < 2;
-    if (weakRetrieval || input.confidence < input.env.TAG_REVIEW_THRESHOLD) {
+    const NEW_VENDOR_REFUSE_CONFIDENCE = 0.5;
+    if (weakRetrieval && input.confidence < NEW_VENDOR_REFUSE_CONFIDENCE) {
       return { decision: "REFUSE", reason: "new_vendor_no_support" };
     }
     return { decision: "QUEUE_REVIEW", reason: "new_vendor" };
