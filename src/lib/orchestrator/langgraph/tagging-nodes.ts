@@ -5,6 +5,7 @@ import { evaluateTransactionPolicy } from "@/lib/agents/policy/evaluator";
 import { isReceiptRequiredAndNotCleared } from "@/lib/agents/policy/receipt-status";
 import { runTaggingAgent } from "@/lib/agents/tagging/run-tagging-agent";
 import { appendAuditLog, appendEvent } from "@/lib/audit/writers";
+import { sendReceiptChaseIfNeeded } from "@/lib/notifications/receipt-chase";
 import { transactions } from "@/lib/db/schema";
 import type { TaggingGraphContext } from "@/lib/orchestrator/langgraph/context";
 import type { TaggingGraphStateType } from "@/lib/orchestrator/langgraph/tagging-state";
@@ -133,6 +134,17 @@ export async function checkReceiptNode(
         state.transactionId,
         state.policyResult.outcome,
       );
+
+  if (receiptBlocked) {
+    await sendReceiptChaseIfNeeded(db, {
+      tenantId: state.tenantId,
+      transactionId: state.transactionId,
+      runId: state.runId,
+      vendorRaw: state.vendorRaw,
+      amount: state.amount,
+      currency: state.currency,
+    });
+  }
 
   return { receiptBlocked, ...traceGraphStep("checkReceipt", started) };
 }

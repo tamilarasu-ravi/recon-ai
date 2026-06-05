@@ -1,6 +1,6 @@
 import { Annotation } from "@langchain/langgraph";
 
-import type { ApRecommendation } from "@/lib/agents/ap/recommend";
+import type { ApRecommendationWithForecast } from "@/lib/agents/ap/recommend-with-forecast";
 import type { GraphStepRecord } from "@/lib/orchestrator/langgraph/trace-step";
 
 /**
@@ -18,7 +18,7 @@ export const ApGraphState = Annotation.Root({
   duplicateInvoiceId: Annotation<string | null>,
   duplicateExternalId: Annotation<string | null>,
   invoiceId: Annotation<string | null>,
-  recommendation: Annotation<ApRecommendation | null>,
+  recommendation: Annotation<ApRecommendationWithForecast | null>,
   status: Annotation<"accepted" | "duplicate" | null>,
   graphSteps: Annotation<GraphStepRecord[]>({
     reducer: (left, right) =>

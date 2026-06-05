@@ -1,7 +1,9 @@
 import type { Runtime } from "@langchain/langgraph";
 
 import { findDuplicateInvoice } from "@/lib/agents/ap/duplicate";
+import { buildTenantApCashForecast } from "@/lib/agents/ap/forecast-loader";
 import { recommendApPayment } from "@/lib/agents/ap/recommend";
+import { recommendApPaymentWithForecast } from "@/lib/agents/ap/recommend-with-forecast";
 import { appendAuditLog, appendEvent } from "@/lib/audit/writers";
 import { apRecommendations, invoices } from "@/lib/db/schema";
 import type { ApGraphContext } from "@/lib/orchestrator/langgraph/context";
@@ -174,13 +176,29 @@ export async function ingestApInvoiceNode(
  */
 export async function recommendApNode(
   state: ApGraphStateType,
+  runtime: Runtime<ApGraphContext>,
 ): Promise<Partial<ApGraphStateType>> {
   const started = Date.now();
-  const recommendation = recommendApPayment({
+  const { db } = getApContext(runtime);
+
+  const prelim = recommendApPayment({
     amount: state.amount,
     currency: state.currency,
     invoiceDateIso: state.invoiceDateIso,
     isDuplicate: false,
+  });
+
+  const cashForecast = await buildTenantApCashForecast(db, state.tenantId, {
+    pendingAmount: state.amount,
+    pendingPayDateIso: prelim.recommendedPayDateIso,
+  });
+
+  const recommendation = recommendApPaymentWithForecast({
+    amount: state.amount,
+    currency: state.currency,
+    invoiceDateIso: state.invoiceDateIso,
+    isDuplicate: false,
+    cashForecast,
   });
 
   return { recommendation, ...traceGraphStep("recommendAp", started) };
@@ -241,6 +259,7 @@ export async function persistApRecommendationNode(
       funding_source: recommendation.fundingSource,
       rationale: recommendation.rationale,
       would_execute_payment: false,
+      cash_forecast: recommendation.cashForecast,
     },
   });
 
