@@ -74,8 +74,8 @@ export default function HomePage(): React.ReactElement {
           <span className="hero__pipe">Eval-gated releases</span>
         </div>
         <p style={{ margin: "1rem 0 0", fontSize: "0.9375rem", color: "var(--color-text-muted)", maxWidth: "42rem" }}>
-          Production: <code>docs/production-roadmap.md</code> · Walkthrough:{" "}
-          <code>docs/guides/orchestrator-walkthrough.md</code>
+          New here? <Link href="/review-queue/new">Add a sample transaction</Link> with tenant-aware
+          presets — or read <code>docs/production-roadmap.md</code> for deploy checklists.
         </p>
       </section>
 
@@ -105,6 +105,13 @@ export default function HomePage(): React.ReactElement {
           <h2 className="card__title">Orchestrator</h2>
           <p className="card__desc">
             Live LangGraph topology — policy → tagging and AP workflows with HITL checkpoints.
+          </p>
+        </Link>
+        <Link href="/review-queue/new" className="card card--link">
+          <h2 className="card__title">Add transaction</h2>
+          <p className="card__desc">
+            Ingest a card transaction with seeded presets — receipt gate, vendor rules, unknown
+            vendor, and policy flags.
           </p>
         </Link>
         <Link href="/settings" className="card card--link">

@@ -71,6 +71,9 @@ export default function ReviewQueuePage(): React.ReactElement {
             </button>
           ))}
         </div>
+        <Link href="/review-queue/new" className="btn btn--primary">
+          Add transaction
+        </Link>
         <button
           type="button"
           className="btn btn--secondary"
