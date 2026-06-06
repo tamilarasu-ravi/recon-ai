@@ -24,7 +24,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     const parsed = compileSchema.parse(body);
     assertTenantApiRateLimit(parsed.tenant_id, "policies-compile");
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
       const env = loadEnv();
 
       const result = await compileAndOptionalPersistPolicy(
@@ -41,7 +44,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         model: result.model,
         persisted: result.persisted ?? null,
       });
-    });
+    },
+      { permission: "policy:admin" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Policy compile failed");
   }

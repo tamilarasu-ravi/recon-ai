@@ -38,7 +38,10 @@ export async function POST(
       request.headers.get("content-length") === "0" ? undefined : await request.json();
     const options = bodySchema.parse(body);
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
       const rows = await db
         .select({
           id: transactions.id,
@@ -104,7 +107,9 @@ export async function POST(
         processing_status: "pending",
         scheduled_immediately: immediate,
       });
-    });
+    },
+      { permission: "review:write" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Transaction reprocess failed");
   }

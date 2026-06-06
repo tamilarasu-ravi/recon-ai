@@ -15,6 +15,7 @@ import { applyPolicyDecisionCap } from "@/lib/orchestrator/policy-cap";
 import { syncAutoTagToErp } from "@/lib/integrations/erp/sync-auto-tag";
 import { buildTaggingObservability } from "@/lib/observability/llm-cost";
 import { syncReviewQueueAfterTagging } from "@/lib/orchestrator/review-queue-sync";
+import { emitPipelineTraceStep, type PipelineTraceContext } from "@/lib/pipeline/trace-step";
 
 const EVAL_SKIP_POLICY_ID = "00000000-0000-0000-0000-000000000000";
 
@@ -62,6 +63,21 @@ export async function evaluatePolicyNode(
 ): Promise<Partial<TaggingGraphStateType>> {
   const started = Date.now();
   const { db, skipPolicy } = getTaggingContext(runtime);
+  const traceContext: PipelineTraceContext = {
+    tenantId: state.tenantId,
+    transactionId: state.transactionId,
+    runId: state.runId,
+  };
+
+  if (!skipPolicy) {
+    await emitPipelineTraceStep(db, traceContext, {
+      step_id: "policy-eval-start",
+      phase: "policy",
+      title: "Policy evaluation",
+      description: "Deterministic rule engine — receipt, MCC, caps.",
+      status: "running",
+    });
+  }
 
   const policyResult = skipPolicy
     ? {
@@ -102,6 +118,23 @@ export async function evaluatePolicyNode(
         node: "evaluatePolicy",
         graph_steps: mergeGraphSteps(state.graphSteps, "evaluatePolicy", started),
       },
+    });
+
+    await emitPipelineTraceStep(db, traceContext, {
+      step_id: "policy-eval-complete",
+      phase: "policy",
+      title: "Policy evaluation",
+      status: "complete",
+      latency_ms: Date.now() - started,
+      detail: {
+        outcome: policyResult.outcome,
+        policy_version: policyResult.policyVersion,
+        matched_rules: policyResult.matchedRules,
+      },
+      description:
+        policyResult.outcome === "FLAG_RECEIPT"
+          ? "Receipt required before AUTO_TAG can proceed."
+          : "Policy outcome recorded on PolicyEvaluated event.",
     });
   }
 
@@ -146,6 +179,22 @@ export async function checkReceiptNode(
     });
   }
 
+  await emitPipelineTraceStep(db, {
+    tenantId: state.tenantId,
+    transactionId: state.transactionId,
+    runId: state.runId,
+  }, {
+    step_id: "receipt-gate",
+    phase: "receipt",
+    title: "Receipt gate",
+    status: receiptBlocked ? "complete" : "skipped",
+    latency_ms: Date.now() - started,
+    detail: { receipt_blocked: receiptBlocked, policy_outcome: state.policyResult.outcome },
+    description: receiptBlocked
+      ? "FLAG_RECEIPT without cleared receipt — AUTO_TAG blocked."
+      : "No receipt block for this transaction.",
+  });
+
   return { receiptBlocked, ...traceGraphStep("checkReceipt", started) };
 }
 
@@ -172,6 +221,11 @@ export async function runTaggingNode(
     currency: state.currency,
     mcc: state.mcc,
     receiptRequiredAndNotCleared: state.receiptBlocked,
+    trace: {
+      tenantId: state.tenantId,
+      transactionId: state.transactionId,
+      runId: state.runId,
+    },
   });
 
   return { taggingResult, ...traceGraphStep("runTagging", started) };
@@ -359,6 +413,38 @@ export async function persistIngestOutcomeNode(
     });
   }
 
+  const traceContext: PipelineTraceContext = {
+    tenantId: state.tenantId,
+    transactionId: state.transactionId,
+    runId: state.runId,
+  };
+
+  await emitPipelineTraceStep(db, traceContext, {
+    step_id: "persist-complete",
+    phase: "persist",
+    title: "Persist outcome",
+    status: "complete",
+    latency_ms: Date.now() - started,
+    detail: {
+      decision: state.finalDecision,
+      reason: state.finalReason,
+      review_queue_synced: state.finalDecision !== "AUTO_TAG",
+    },
+    description: "TransactionTagged event, audit log, review queue, and processing status updated.",
+  });
+
+  await emitPipelineTraceStep(db, traceContext, {
+    step_id: "orchestrator-complete",
+    phase: "orchestrator",
+    title: "LangGraph orchestrator",
+    status: "complete",
+    detail: {
+      decision: state.finalDecision,
+      confidence: state.taggingResult.confidence,
+      graph_step_count: graphSteps.length,
+    },
+  });
+
   return traceGraphStep("persistIngestOutcome", started);
 }
 
@@ -453,6 +539,40 @@ export async function persistReprocessOutcomeNode(
       glAccountId,
     });
   }
+
+  const traceContext: PipelineTraceContext = {
+    tenantId: state.tenantId,
+    transactionId: state.transactionId,
+    runId: state.runId,
+  };
+
+  await emitPipelineTraceStep(db, traceContext, {
+    step_id: "persist-reprocess-complete",
+    phase: "persist",
+    title: "Persist reprocess outcome",
+    status: "complete",
+    latency_ms: Date.now() - started,
+    detail: {
+      decision: state.finalDecision,
+      reason: state.finalReason,
+      reprocess: true,
+      review_queue_synced: state.finalDecision !== "AUTO_TAG",
+    },
+    description: "TransactionRetagged event, audit log, and review queue updated after reprocess.",
+  });
+
+  await emitPipelineTraceStep(db, traceContext, {
+    step_id: "orchestrator-reprocess-complete",
+    phase: "orchestrator",
+    title: "LangGraph orchestrator",
+    status: "complete",
+    detail: {
+      decision: state.finalDecision,
+      confidence: state.taggingResult.confidence,
+      reprocess: true,
+      graph_step_count: graphSteps.length,
+    },
+  });
 
   return traceGraphStep("persistReprocessOutcome", started);
 }

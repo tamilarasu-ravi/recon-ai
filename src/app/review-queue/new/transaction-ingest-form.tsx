@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DecisionBadge } from "@/app/components/ui/decision-badge";
+import { IngestWorkflowTrace } from "@/app/components/ingest-workflow-trace";
 import { useTenant } from "@/app/components/tenant-provider";
 import { apiFetch } from "@/lib/ui/api-fetch";
 import {
@@ -293,6 +294,8 @@ export function TransactionIngestForm(): React.ReactElement {
   }
 
   const transactionId = ingestResult?.transactionId ?? pollStatus?.transaction_id ?? null;
+  const activeRunId = ingestResult?.runId ?? null;
+  const traceEnabled = Boolean(tenantId && transactionId && activeRunId && !error);
   const detailHref =
     tenantId && transactionId
       ? `/transactions/${transactionId}?tenant_id=${encodeURIComponent(tenantId)}`
@@ -669,6 +672,15 @@ export function TransactionIngestForm(): React.ReactElement {
           </div>
         ) : null}
       </section>
+
+      {traceEnabled && tenantId && transactionId && activeRunId ? (
+        <IngestWorkflowTrace
+          tenantId={tenantId}
+          transactionId={transactionId}
+          runId={activeRunId}
+          enabled={traceEnabled}
+        />
+      ) : null}
     </div>
   );
 }

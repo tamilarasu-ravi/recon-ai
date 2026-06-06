@@ -22,7 +22,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body: unknown = await request.json();
     const parsed = bodySchema.parse(body);
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
       const txnRows = await db
         .select({
           taggingDecision: transactions.taggingDecision,
@@ -64,7 +67,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
 
       return NextResponse.json({ posted: result, run_id: runId });
-    });
+    },
+      { permission: "platform:admin" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "ERP post failed");
   }

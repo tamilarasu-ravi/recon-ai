@@ -57,6 +57,13 @@
       "when": 1780810000000,
       "tag": "0007_recon_app_role",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780820000000,
+      "tag": "0008_tenant_memberships",
+      "breakpoints": true
     }
   ]
 }

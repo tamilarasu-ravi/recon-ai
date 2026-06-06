@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AuthUserMenu } from "@/app/components/auth-user-menu";
 import { useTenant } from "@/app/components/tenant-provider";
 
 /**
@@ -12,7 +13,7 @@ import { useTenant } from "@/app/components/tenant-provider";
  */
 export function AppNav(): React.ReactElement {
   const pathname = usePathname();
-  const { tenants, tenantId, setTenantId, loading, error } = useTenant();
+  const { tenants, tenantId, tenantRole, setTenantId, loading, error } = useTenant();
 
   const navItems = [
     { href: "/", label: "Home", active: pathname === "/" },
@@ -62,6 +63,12 @@ export function AppNav(): React.ReactElement {
               ))}
             </select>
           </label>
+          {tenantRole ? (
+            <span className="badge badge--reason" style={{ textTransform: "capitalize" }}>
+              {tenantRole}
+            </span>
+          ) : null}
+          <AuthUserMenu />
           {error ? <span className="alert alert--error" style={{ padding: "0.25rem 0.5rem" }}>{error}</span> : null}
         </div>
       </div>

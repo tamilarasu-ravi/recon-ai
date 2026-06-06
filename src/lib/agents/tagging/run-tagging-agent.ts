@@ -17,6 +17,10 @@ import type { DbClient } from "@/lib/db/client";
 import { chartOfAccounts, transactions } from "@/lib/db/schema";
 import { applyTriStateGate, isGlInCoaAllowList, type TaggingDecision } from "@/lib/orchestrator/gates";
 import {
+  emitPipelineTraceStep,
+  type PipelineTraceContext,
+} from "@/lib/pipeline/trace-step";
+import {
   hasPromptInjectionSignal,
   hasUnknownVendorSignal,
   isReviewOnlyGlCode,
@@ -33,6 +37,8 @@ export interface TaggingAgentInput {
   currency: string;
   mcc?: string;
   receiptRequiredAndNotCleared?: boolean;
+  /** When set, emits PipelineTraceStep events for live ingest UI. */
+  trace?: PipelineTraceContext;
 }
 
 export interface StepSpan {
@@ -69,6 +75,41 @@ export async function runTaggingAgent(
 ): Promise<TaggingAgentResult> {
   const steps: StepSpan[] = [];
   const receiptBlocked = input.receiptRequiredAndNotCleared ?? false;
+  const trace = input.trace;
+
+  /**
+   * Writes a pipeline trace step when trace context is configured.
+   *
+   * @param stepId - Unique step id within the run.
+   * @param phase - Workflow phase for UI grouping.
+   * @param title - Short label shown in the timeline.
+   * @param status - Running, complete, error, or skipped.
+   * @param detail - Optional structured metadata for the UI.
+   * @param latencyMs - Optional step duration.
+   * @param description - Optional longer explanation.
+   */
+  async function traceEmit(
+    stepId: string,
+    phase: Parameters<typeof emitPipelineTraceStep>[2]["phase"],
+    title: string,
+    status: Parameters<typeof emitPipelineTraceStep>[2]["status"],
+    detail?: Record<string, unknown>,
+    latencyMs?: number,
+    description?: string,
+  ): Promise<void> {
+    if (!trace) {
+      return;
+    }
+    await emitPipelineTraceStep(db, trace, {
+      step_id: stepId,
+      phase,
+      title,
+      description,
+      status,
+      latency_ms: latencyMs,
+      detail,
+    });
+  }
 
   const normalizeStarted = Date.now();
   const vendorResult = await normalizeVendor(db, input.tenantId, input.vendorRaw);
@@ -78,6 +119,19 @@ export async function runTaggingAgent(
     latency_ms: Date.now() - normalizeStarted,
     detail: { vendor_id: vendorResult.vendorId, is_new_vendor: vendorResult.isNewVendor },
   });
+  await traceEmit(
+    "vendor-normalize",
+    "normalize",
+    "Vendor normalization",
+    "complete",
+    {
+      vendor_id: vendorResult.vendorId,
+      canonical_name: vendorResult.canonicalName,
+      is_new_vendor: vendorResult.isNewVendor,
+    },
+    Date.now() - normalizeStarted,
+    "Alias lookup maps raw vendor string to canonical vendor_id.",
+  );
 
   if (vendorResult.vendorId) {
     await db
@@ -112,6 +166,17 @@ export async function runTaggingAgent(
     latency_ms: Date.now() - ruleStarted,
     detail: { rule_hit: ruleHit, gl_account_id: ruleGlAccountId },
   });
+  await traceEmit(
+    "rule-lookup",
+    "rules",
+    "Vendor rule lookup",
+    ruleHit ? "complete" : "skipped",
+    { rule_hit: ruleHit, gl_account_id: ruleGlAccountId },
+    Date.now() - ruleStarted,
+    ruleHit
+      ? "Seeded vendor rule matched — may skip LLM call."
+      : "No vendor rule — LLM or retrieval will suggest GL.",
+  );
 
   const labeledCount = await countLabeledTransactions(db, input.tenantId);
   const tenantHasMinHistory = hasMinHistory(labeledCount);
@@ -121,12 +186,27 @@ export async function runTaggingAgent(
 
   try {
     const queryText = buildEmbeddingText(input.vendorRaw, input.memo, input.mcc);
+
+    await traceEmit(
+      "embedding-start",
+      "embedding",
+      "Vector embedding",
+      "running",
+      {
+        chunk_text: queryText,
+        embedding_model: env.EMBEDDING_MODEL,
+        dimensions: env.EMBEDDING_DIMENSIONS,
+        storage: "transaction_embeddings (pgvector)",
+      },
+      undefined,
+      "Single document chunk: vendor | memo | mcc — embedded for similarity search.",
+    );
+
     const queryEmbedding = env.LLM_ENABLE_LIVE_CALLS
       ? await createLlmClient(env).embedText(queryText)
       : buildDeterministicEmbedding(queryText, env.EMBEDDING_DIMENSIONS);
 
-    neighbors = await retrieveSimilarTransactions(db, input.tenantId, queryEmbedding, 5);
-
+    let storedInVectorDb = false;
     if (env.LLM_ENABLE_LIVE_CALLS) {
       await embedAndStoreTransaction(
         db,
@@ -137,7 +217,38 @@ export async function runTaggingAgent(
         input.memo,
         input.mcc,
       );
+      storedInVectorDb = true;
     }
+
+    await traceEmit(
+      "embedding-complete",
+      "embedding",
+      "Vector embedding",
+      "complete",
+      {
+        chunk_text: queryText,
+        embedding_model: env.EMBEDDING_MODEL,
+        dimensions: queryEmbedding.length,
+        stored_in_pgvector: storedInVectorDb,
+        live_api: env.LLM_ENABLE_LIVE_CALLS,
+      },
+      undefined,
+      storedInVectorDb
+        ? "Embedding upserted to transaction_embeddings for future retrieval."
+        : "Deterministic embedding used (LLM_ENABLE_LIVE_CALLS=false).",
+    );
+
+    await traceEmit(
+      "rag-retrieval-start",
+      "rag",
+      "RAG retrieval",
+      "running",
+      { top_k: 5, labeled_corpus_count: labeledCount },
+      undefined,
+      "Cosine similarity search over tenant-scoped labeled transactions.",
+    );
+
+    neighbors = await retrieveSimilarTransactions(db, input.tenantId, queryEmbedding, 5);
 
     const proposedGlFromRetrievalPreview = neighbors[0]?.glAccountId;
     const supportCountPreview = proposedGlFromRetrievalPreview
@@ -162,6 +273,22 @@ export async function runTaggingAgent(
         neighbors: neighborAuditRows,
       },
     });
+    await traceEmit(
+      "rag-retrieval-complete",
+      "rag",
+      "RAG retrieval",
+      "complete",
+      {
+        neighbor_count: neighbors.length,
+        top1_similarity: neighbors[0]?.similarity ?? 0,
+        support_count: supportCountPreview,
+        agree_frac: agreeFracPreview,
+        labeled_corpus_count: labeledCount,
+        neighbors: neighborAuditRows,
+      },
+      Date.now() - retrievalStarted,
+      "Top-k neighbors inform confidence and LLM context.",
+    );
   } catch {
     steps.push({
       name: "retrieval",
@@ -169,6 +296,14 @@ export async function runTaggingAgent(
       latency_ms: Date.now() - retrievalStarted,
       detail: { neighbor_count: 0 },
     });
+    await traceEmit(
+      "rag-retrieval-error",
+      "rag",
+      "RAG retrieval",
+      "error",
+      { neighbor_count: 0 },
+      Date.now() - retrievalStarted,
+    );
   }
 
   const proposedGlFromRule = ruleGlAccountId;
@@ -186,6 +321,23 @@ export async function runTaggingAgent(
 
   const llmStarted = Date.now();
   const canSkipLlm = ruleHit && ruleGlAccountId !== undefined && isGlInCoaAllowList(ruleGlAccountId, coaSet);
+
+  await traceEmit(
+    "llm-tagging-start",
+    "llm",
+    "LLM structured tagging",
+    "running",
+    {
+      llm_skipped: canSkipLlm,
+      skip_reason: canSkipLlm ? "vendor_rule_hit" : undefined,
+      prompt_version: TAGGING_PROMPT_VERSION,
+      neighbor_count: neighbors.length,
+    },
+    undefined,
+    canSkipLlm
+      ? "Rule-first path — LLM call skipped."
+      : "Structured JSON suggestion with CoA allow-list and RAG neighbors in context.",
+  );
 
   const suggestResult = await suggestTagging(
     env,
@@ -218,6 +370,27 @@ export async function runTaggingAgent(
       error_message: suggestResult.errorMessage,
     },
   });
+  await traceEmit(
+    "llm-tagging-complete",
+    "llm",
+    suggestResult.llmSkipped ? "LLM skipped (rule-first)" : "LLM structured tagging",
+    suggestResult.parseStatus === "ok" ? "complete" : "error",
+    {
+      llm_skipped: suggestResult.llmSkipped,
+      llm_skipped_reason: suggestResult.llmSkippedReason,
+      cost_usd: suggestResult.llmMeta?.costUsd ?? 0,
+      prompt_tokens: suggestResult.llmMeta?.promptTokens ?? 0,
+      completion_tokens: suggestResult.llmMeta?.completionTokens ?? 0,
+      total_tokens:
+        (suggestResult.llmMeta?.promptTokens ?? 0) +
+        (suggestResult.llmMeta?.completionTokens ?? 0),
+      model: suggestResult.llmMeta?.model,
+      prompt_version: suggestResult.llmSkipped ? undefined : TAGGING_PROMPT_VERSION,
+      suggested_gl_account_id: suggestResult.suggestion?.gl_account_id,
+      error_message: suggestResult.errorMessage,
+    },
+    Date.now() - llmStarted,
+  );
 
   const parseFailed = suggestResult.parseStatus === "failed";
   const suggestedGl =
@@ -237,6 +410,15 @@ export async function runTaggingAgent(
     latency_ms: Date.now() - confidenceStarted,
     detail: confidenceResult.breakdown,
   });
+  await traceEmit(
+    "confidence-gate",
+    "confidence",
+    "Confidence scoring",
+    "complete",
+    confidenceResult.breakdown as Record<string, unknown>,
+    Date.now() - confidenceStarted,
+    "Deterministic score from rules, retrieval agreement, and history.",
+  );
 
   const glInCoa = suggestedGl ? isGlInCoaAllowList(suggestedGl, coaSet) : false;
   const suggestedGlCode = suggestedGl ? coaRows.find((row) => row.id === suggestedGl)?.glCode : undefined;
@@ -281,6 +463,19 @@ export async function runTaggingAgent(
     latency_ms: 0,
     detail: { decision: gateResult.decision, reason: gateResult.reason },
   });
+  await traceEmit(
+    "tri-state-decision",
+    "decision",
+    "Tri-state decision",
+    "complete",
+    {
+      decision: gateResult.decision,
+      reason: gateResult.reason,
+      confidence: confidenceResult.confidence,
+    },
+    undefined,
+    "AUTO_TAG, QUEUE_REVIEW, or REFUSE based on confidence, policy, and safety gates.",
+  );
 
   await db
     .update(transactions)

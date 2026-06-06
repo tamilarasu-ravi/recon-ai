@@ -16,6 +16,7 @@
     "eval:tagging": "tsx scripts/run-tagging-eval.ts",
     "eval:gate": "tsx scripts/eval-gate.ts",
     "demo": "tsx scripts/demo.ts",
+    "ingest:rag-demo": "tsx scripts/ingest-rag-demo.ts",
     "webhook:demo": "tsx scripts/webhook-demo.ts",
     "verify": "tsx scripts/verify-showcase.ts",
     "verify:full": "tsx scripts/verify-showcase.ts && pnpm demo",
@@ -25,6 +26,7 @@
     "production:check": "tsx scripts/production-check.ts",
     "auth:print-hints": "tsx scripts/print-dev-credentials.ts",
     "auth:reset-keys": "tsx scripts/reset-dev-api-keys.ts",
+    "auth:seed-memberships": "tsx scripts/seed-memberships.ts",
     "mcp": "tsx src/mcp/server.ts",
     "graph:diagram": "tsx scripts/export-graph-diagram.ts",
     "db:setup-checkpointer": "tsx scripts/setup-langgraph-checkpointer.ts",
@@ -34,6 +36,7 @@
     "playwright:install": "playwright install chromium"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.4.3",
     "@google/generative-ai": "^0.24.0",
     "@langchain/core": "^1.1.48",
     "@langchain/langgraph": "^1.3.3",

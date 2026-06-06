@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageLayout } from "@/app/components/page-layout";
+import { PipelineWorkflowTrace } from "@/app/components/ingest-workflow-trace";
 import { RetrievalContextPanel } from "@/app/components/retrieval-context-panel";
 import { TransactionRunTrace } from "@/app/components/transaction-run-trace";
 import { DecisionBadge } from "@/app/components/ui/decision-badge";
@@ -452,6 +453,24 @@ export function TransactionDetailClient(): React.ReactElement {
           ) : null}
 
           <RetrievalContextPanel retrieval={selectedRetrieval} tenantId={tenantId} />
+
+          {selectedRunId && tenantId ? (
+            <section className="detail-grid__full" style={{ marginBottom: "1.25rem" }}>
+              <PipelineWorkflowTrace
+                tenantId={tenantId}
+                transactionId={transactionId}
+                runId={selectedRunId}
+                enabled
+                showDetailLink={false}
+                auditSectionId="run-trace"
+                title={
+                  detail.transaction.processingStatus === "processing"
+                    ? "Live pipeline trace"
+                    : "Pipeline trace"
+                }
+              />
+            </section>
+          ) : null}
 
           <div className="detail-grid">
             <section id="run-trace" className="panel panel--muted detail-grid__full">

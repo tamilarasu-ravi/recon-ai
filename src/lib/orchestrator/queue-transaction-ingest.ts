@@ -4,6 +4,10 @@ import { appendEvent } from "@/lib/audit/writers";
 import { deriveIdempotencyKey, loadEnv, newRunId } from "@/lib/config/env";
 import type { DbClient } from "@/lib/db/client";
 import { transactions } from "@/lib/db/schema";
+import {
+  emitPipelineTraceStep,
+  type PipelineTraceContext,
+} from "@/lib/pipeline/trace-step";
 import type { PipelineOptions, PipelineResult, TransactionCreatedInput } from "@/lib/orchestrator/run-pipeline";
 import { runWithTenantRls } from "@/lib/db/tenant-rls";
 import { processQueuedTransaction } from "@/lib/orchestrator/process-queued-transaction";
@@ -92,6 +96,27 @@ export async function queueTransactionIngest(
     payload: {
       transaction_id: transaction.id,
       external_transaction_id: input.externalTransactionId,
+      vendor_raw: input.vendorRaw,
+      processing_mode: options?.processingMode ?? "sync",
+    },
+  });
+
+  const traceContext: PipelineTraceContext = {
+    tenantId: input.tenantId,
+    transactionId: transaction.id,
+    runId,
+  };
+
+  await emitPipelineTraceStep(db, traceContext, {
+    step_id: "ingest-stored",
+    phase: "ingest",
+    title: "Transaction ingested",
+    description: "Row persisted in Postgres with idempotency key; queued for tagging.",
+    status: "complete",
+    detail: {
+      external_transaction_id: input.externalTransactionId,
+      amount: input.amount,
+      currency: input.currency,
       vendor_raw: input.vendorRaw,
       processing_mode: options?.processingMode ?? "sync",
     },

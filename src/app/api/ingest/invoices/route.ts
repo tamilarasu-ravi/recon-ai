@@ -26,18 +26,23 @@ export async function POST(request: Request): Promise<NextResponse> {
     const parsed = ingestInvoiceSchema.parse(body);
     assertIngestRateLimit(parsed.tenant_id, "ingest-invoices");
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const result = await runApPipeline(db, {
-        tenantId: parsed.tenant_id,
-        externalInvoiceId: parsed.external_invoice_id,
-        vendorRaw: parsed.vendor_raw,
-        amount: parsed.amount,
-        currency: parsed.currency,
-        invoiceDate: parsed.invoice_date,
-      });
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const result = await runApPipeline(db, {
+          tenantId: parsed.tenant_id,
+          externalInvoiceId: parsed.external_invoice_id,
+          vendorRaw: parsed.vendor_raw,
+          amount: parsed.amount,
+          currency: parsed.currency,
+          invoiceDate: parsed.invoice_date,
+        });
 
-      return NextResponse.json(result, { status: result.status === "duplicate" ? 409 : 201 });
-    });
+        return NextResponse.json(result, { status: result.status === "duplicate" ? 409 : 201 });
+      },
+      { permission: "ingest:write" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Invoice ingest failed");
   }

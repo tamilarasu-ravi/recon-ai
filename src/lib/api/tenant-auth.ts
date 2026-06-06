@@ -1,29 +1,42 @@
 import { NextResponse } from "next/server";
 
-import { assertTenantScope, authorizeApiRequest } from "@/lib/auth/api-auth";
-import type { ApiAuthContext } from "@/lib/auth/api-auth";
+import { assertPermission, type Permission } from "@/lib/auth/rbac";
+import { resolveTenantAuth } from "@/lib/auth/resolve-tenant-auth";
+import type { TenantAuthContext } from "@/lib/auth/tenant-auth-types";
 import { assertTenantApiRateLimit } from "@/lib/api/apply-rate-limit";
 import type { DbClient } from "@/lib/db/client";
 import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
 import { RateLimitExceededError } from "@/lib/security/rate-limit";
 
+export type { TenantAuthContext, TenantRole } from "@/lib/auth/tenant-auth-types";
+
+export interface WithTenantAccessOptions {
+  permission?: Permission;
+}
+
 /**
- * Authorizes an API request and validates tenant scope when auth is enabled.
+ * Authorizes an API request and validates tenant scope.
  *
  * @param request - Incoming request.
  * @param tenantId - Tenant id from query or body.
- * @returns Auth context (null when auth disabled).
+ * @param options - Optional RBAC permission gate.
+ * @returns Auth context (null when auth disabled in dev).
  * @throws Error when authorization fails.
  */
 export async function requireTenantAccess(
   request: Request,
   tenantId: string,
-): Promise<ApiAuthContext | null> {
+  options?: WithTenantAccessOptions,
+): Promise<TenantAuthContext | null> {
   return runWithRlsBypass(async () => {
     const { getDb } = await import("@/lib/db/client");
-    const auth = await authorizeApiRequest(getDb(), request);
-    assertTenantScope(auth, tenantId);
+    const auth = await resolveTenantAuth(getDb(), request, tenantId);
     assertTenantApiRateLimit(tenantId, "tenant-api");
+
+    if (options?.permission) {
+      assertPermission(auth?.role ?? null, options.permission);
+    }
+
     return auth;
   });
 }
@@ -34,14 +47,16 @@ export async function requireTenantAccess(
  * @param request - Incoming HTTP request.
  * @param tenantId - Tenant id from query or body.
  * @param handler - Route logic using getDb() within the RLS scope.
+ * @param options - Optional RBAC permission gate.
  * @returns Handler result.
  */
 export async function withTenantAccess<T>(
   request: Request,
   tenantId: string,
-  handler: (db: DbClient, auth: ApiAuthContext | null) => Promise<T>,
+  handler: (db: DbClient, auth: TenantAuthContext | null) => Promise<T>,
+  options?: WithTenantAccessOptions,
 ): Promise<T> {
-  const auth = await requireTenantAccess(request, tenantId);
+  const auth = await requireTenantAccess(request, tenantId, options);
   return runWithTenantRls(tenantId, async () => {
     const { getDb } = await import("@/lib/db/client");
     return handler(getDb(), auth);
@@ -81,7 +96,12 @@ function resolveRouteErrorStatus(message: string): number {
   if (message.includes("Forbidden:")) {
     return 403;
   }
-  if (message.includes("API key") || message.includes("Invalid or inactive")) {
+  if (
+    message.includes("API key") ||
+    message.includes("Invalid or inactive") ||
+    message.includes("Authentication required") ||
+    message.includes("Sign in required")
+  ) {
     return 401;
   }
   if (message.includes("not found") || message.includes("Unknown tenant")) {

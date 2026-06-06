@@ -25,17 +25,22 @@ export async function POST(
     const body: unknown = await request.json();
     const parsed = approveSchema.parse(body);
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const result = await resumeAutoTagApproval(
-        db,
-        parsed.tenant_id,
-        transactionId,
-        parsed.run_id,
-        parsed.approved,
-      );
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const result = await resumeAutoTagApproval(
+          db,
+          parsed.tenant_id,
+          transactionId,
+          parsed.run_id,
+          parsed.approved,
+        );
 
-      return NextResponse.json(result);
-    });
+        return NextResponse.json(result);
+      },
+      { permission: "review:write" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Approve failed");
   }

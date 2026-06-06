@@ -397,6 +397,26 @@ export const webhookSecrets = pgTable(
   (table) => [index("webhook_secrets_tenant_id_idx").on(table.tenantId)],
 );
 
+export const tenantRoleEnum = pgEnum("tenant_role", ["admin", "accountant", "viewer"]);
+
+export const tenantMemberships = pgTable(
+  "tenant_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clerkUserId: text("clerk_user_id").notNull(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    role: tenantRoleEnum("role").notNull().default("accountant"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("tenant_memberships_user_tenant_uidx").on(table.clerkUserId, table.tenantId),
+    index("tenant_memberships_clerk_user_id_idx").on(table.clerkUserId),
+    index("tenant_memberships_tenant_id_idx").on(table.tenantId),
+  ],
+);
+
 export const apRecommendations = pgTable(
   "ap_recommendations",
   {

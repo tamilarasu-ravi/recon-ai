@@ -59,7 +59,11 @@ export async function apiFetch(
     }
   }
 
-  return fetch(input, { ...init, headers });
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: init?.credentials ?? "include",
+  });
 }
 
 /**

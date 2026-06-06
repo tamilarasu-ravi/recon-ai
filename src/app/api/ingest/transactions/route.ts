@@ -36,7 +36,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     const parsed = ingestSchema.parse(body);
     assertIngestRateLimit(parsed.tenant_id, "ingest-transactions");
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
     const input = {
       tenantId: parsed.tenant_id,
       externalTransactionId: parsed.external_transaction_id,
@@ -95,7 +98,9 @@ export async function POST(request: Request): Promise<NextResponse> {
             ? 202
             : 201,
     });
-    });
+    },
+      { permission: "ingest:write" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Ingest failed");
   }

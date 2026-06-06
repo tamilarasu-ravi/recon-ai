@@ -25,7 +25,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     const url = new URL(request.url);
     const parsed = querySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
 
-    return await withTenantAccess(request, parsed.tenant_id, async () => {
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async () => {
       const config = getQuickBooksConfig();
       if (!config) {
         return NextResponse.json(
@@ -44,7 +47,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 
       const authorizeUrl = buildQuickBooksAuthorizeUrl(config, state);
       return NextResponse.redirect(authorizeUrl);
-    });
+    },
+      { permission: "platform:admin" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "QuickBooks connect failed");
   }

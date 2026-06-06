@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { assertTenantApiRateLimit } from "@/lib/api/apply-rate-limit";
-import { toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
-import { authorizeApiRequest, assertTenantScope } from "@/lib/auth/api-auth";
+import { requireTenantAccess, toRouteErrorResponse, withTenantAccess } from "@/lib/api/tenant-auth";
 import { createApiKeyForTenant, listApiKeysForTenant } from "@/lib/auth/api-keys-admin";
 import {
   canBootstrapApiKey,
@@ -37,10 +36,15 @@ export async function GET(request: Request): Promise<NextResponse> {
     const url = new URL(request.url);
     const parsed = querySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const keys = await listApiKeysForTenant(db, parsed.tenant_id);
-      return NextResponse.json({ keys });
-    });
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const keys = await listApiKeysForTenant(db, parsed.tenant_id);
+        return NextResponse.json({ keys });
+      },
+      { permission: "platform:admin" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "API key list failed");
   }
@@ -82,15 +86,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
         if (allowBootstrap) {
           // First key for tenant — ignore stale/invalid Bearer headers from the browser.
-        } else if (authRequired) {
-          const auth = await authorizeApiRequest(db, request);
-          assertTenantScope(auth, tenantId);
-          assertTenantApiRateLimit(tenantId, "api-keys-create");
         } else {
-          const auth = await authorizeApiRequest(db, request);
-          if (auth) {
-            assertTenantScope(auth, tenantId);
-          }
+          await requireTenantAccess(request, tenantId, { permission: "platform:admin" });
+          assertTenantApiRateLimit(tenantId, "api-keys-create");
         }
 
         const created = await createApiKeyForTenant(db, tenantId, parsed.name);

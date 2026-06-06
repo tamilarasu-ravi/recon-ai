@@ -5,6 +5,7 @@ import type { AppEnv } from "@/lib/config/env";
 import type { DbClient } from "@/lib/db/client";
 import { transactions } from "@/lib/db/schema";
 import { invokeTaggingGraph } from "@/lib/orchestrator/langgraph/tagging-graph";
+import { emitPipelineTraceStep } from "@/lib/pipeline/trace-step";
 import type { PipelineOptions, PipelineResult, TransactionCreatedInput } from "@/lib/orchestrator/run-pipeline";
 import { toAcceptedPipelineResult } from "@/lib/orchestrator/run-pipeline-result";
 
@@ -28,6 +29,18 @@ export async function processQueuedTransaction(
     .update(transactions)
     .set({ processingStatus: "processing", updatedAt: new Date() })
     .where(eq(transactions.id, input.transactionId));
+
+  await emitPipelineTraceStep(db, {
+    tenantId: input.tenantId,
+    transactionId: input.transactionId,
+    runId: input.runId,
+  }, {
+    step_id: "orchestrator-start",
+    phase: "orchestrator",
+    title: "LangGraph orchestrator",
+    description: "Policy → receipt gate → tagging agent → persist.",
+    status: "running",
+  });
 
   const graphResult = await invokeTaggingGraph(
     db,

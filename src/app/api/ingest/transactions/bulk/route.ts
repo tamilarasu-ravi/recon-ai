@@ -17,22 +17,27 @@ export async function POST(request: Request): Promise<NextResponse> {
     const parsed = bulkIngestBodySchema.parse(body);
     assertIngestRateLimit(parsed.tenant_id, "ingest-transactions-bulk");
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const summary = await runBulkTransactionIngest(
-        db,
-        parsed.tenant_id,
-        parsed.transactions,
-        { async: parsed.async },
-      );
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const summary = await runBulkTransactionIngest(
+          db,
+          parsed.tenant_id,
+          parsed.transactions,
+          { async: parsed.async },
+        );
 
-      return NextResponse.json(
-        {
-          ...summary,
-          async: parsed.async,
-        },
-        { status: parsed.async ? 202 : 201 },
-      );
-    });
+        return NextResponse.json(
+          {
+            ...summary,
+            async: parsed.async,
+          },
+          { status: parsed.async ? 202 : 201 },
+        );
+      },
+      { permission: "ingest:write" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Bulk ingest failed");
   }

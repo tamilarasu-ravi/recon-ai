@@ -22,15 +22,20 @@ export async function DELETE(
     const url = new URL(request.url);
     const parsed = querySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const deleted = await deletePolicyRule(db, parsed.tenant_id, ruleId);
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const deleted = await deletePolicyRule(db, parsed.tenant_id, ruleId);
 
-      if (!deleted) {
-        return NextResponse.json({ error: "Rule not found" }, { status: 404 });
-      }
+        if (!deleted) {
+          return NextResponse.json({ error: "Rule not found" }, { status: 404 });
+        }
 
-      return NextResponse.json({ deleted: true });
-    });
+        return NextResponse.json({ deleted: true });
+      },
+      { permission: "policy:admin" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Policy rule delete failed");
   }

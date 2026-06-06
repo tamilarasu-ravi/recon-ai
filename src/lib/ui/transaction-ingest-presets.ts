@@ -80,6 +80,20 @@ const TENANT_A_PRESETS: TransactionIngestPreset[] = [
     },
   },
   {
+    id: "rag-demo",
+    label: "RAG demo — EC2 hosting (no vendor rule)",
+    description:
+      "Unknown vendor with memo matching seeded AWS txns — RAG neighbors + LLM (rule lookup skipped).",
+    expectedOutcome: "QUEUE_REVIEW with RAG neighbors (GL 6100) in pipeline trace",
+    values: {
+      vendorRaw: "EC2 Hosting Services",
+      amount: "125.00",
+      currency: "USD",
+      memo: "ec2 hosting",
+      mcc: "",
+    },
+  },
+  {
     id: "unknown-vendor",
     label: "Unknown courier — new vendor",
     description: "No alias or rule; forces human review or refuse.",

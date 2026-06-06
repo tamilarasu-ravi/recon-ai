@@ -22,16 +22,21 @@ export async function POST(
     const body: unknown = await request.json();
     const parsed = overrideSchema.parse(body);
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const result = await applyTransactionOverride(db, {
-        tenantId: parsed.tenant_id,
-        transactionId,
-        glCode: parsed.gl_code,
-        taxCode: parsed.tax_code,
-      });
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const result = await applyTransactionOverride(db, {
+          tenantId: parsed.tenant_id,
+          transactionId,
+          glCode: parsed.gl_code,
+          taxCode: parsed.tax_code,
+        });
 
-      return NextResponse.json(result);
-    });
+        return NextResponse.json(result);
+      },
+      { permission: "review:write" },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Override failed";
     if (message.includes("not found")) {

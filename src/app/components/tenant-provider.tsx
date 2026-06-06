@@ -40,11 +40,15 @@ export interface TenantOption {
   id: string;
   slug: string;
   name: string;
+  /** Present when SSO memberships are configured. */
+  role?: "admin" | "accountant" | "viewer";
 }
 
 interface TenantContextValue {
   tenants: TenantOption[];
   tenantId: string | null;
+  /** Role for the active tenant (from membership or API key list). */
+  tenantRole: TenantOption["role"] | null;
   setTenantId: (id: string) => void;
   loading: boolean;
   error: string | null;
@@ -113,9 +117,22 @@ export function TenantProvider({ children }: { children: ReactNode }): React.Rea
     [tenantId, pathname, router],
   );
 
+  const tenantRole = useMemo(
+    () => tenants.find((tenant) => tenant.id === tenantId)?.role ?? null,
+    [tenants, tenantId],
+  );
+
   const value = useMemo(
-    () => ({ tenants, tenantId, setTenantId, loading, error, reloadTenants: loadTenants }),
-    [tenants, tenantId, setTenantId, loading, error, loadTenants],
+    () => ({
+      tenants,
+      tenantId,
+      tenantRole,
+      setTenantId,
+      loading,
+      error,
+      reloadTenants: loadTenants,
+    }),
+    [tenants, tenantId, tenantRole, setTenantId, loading, error, loadTenants],
   );
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;

@@ -26,10 +26,15 @@ export async function GET(request: Request): Promise<NextResponse> {
     const url = new URL(request.url);
     const parsed = querySchema.parse({ tenant_id: url.searchParams.get("tenant_id") });
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const secrets = await listWebhookSecretsForTenant(db, parsed.tenant_id);
-      return NextResponse.json({ secrets });
-    });
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const secrets = await listWebhookSecretsForTenant(db, parsed.tenant_id);
+        return NextResponse.json({ secrets });
+      },
+      { permission: "platform:admin" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Webhook secret list failed");
   }
@@ -43,23 +48,28 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body: unknown = await request.json();
     const parsed = createSchema.parse(body);
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
-      const created = await createWebhookSecretForTenant(db, parsed.tenant_id, parsed.name);
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
+        const created = await createWebhookSecretForTenant(db, parsed.tenant_id, parsed.name);
 
-      return NextResponse.json(
-        {
-          secret: {
-            id: created.id,
-            name: created.name,
-            secretPrefix: created.secretPrefix,
-            isActive: created.isActive,
-            createdAt: created.createdAt,
+        return NextResponse.json(
+          {
+            secret: {
+              id: created.id,
+              name: created.name,
+              secretPrefix: created.secretPrefix,
+              isActive: created.isActive,
+              createdAt: created.createdAt,
+            },
+            raw_secret: created.rawSecret,
           },
-          raw_secret: created.rawSecret,
-        },
-        { status: 201 },
-      );
-    });
+          { status: 201 },
+        );
+      },
+      { permission: "platform:admin" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Webhook secret create failed");
   }

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { PageLayout } from "@/app/components/page-layout";
+import {
+  PipelineTraceModal,
+  type PipelineTraceModalTarget,
+} from "@/app/components/pipeline-trace-modal";
 import { DecisionBadge } from "@/app/components/ui/decision-badge";
 import { ReasonBadge } from "@/app/components/ui/reason-badge";
 import { useTenant } from "@/app/components/tenant-provider";
@@ -17,6 +21,9 @@ import { useReviewQueue } from "@/lib/ui/use-review-queue";
 export default function ReviewQueuePage(): React.ReactElement {
   const { tenantId, loading: tenantLoading } = useTenant();
   const [status, setStatus] = useState<"open" | "resolved" | "all">("open");
+  const [traceModalTarget, setTraceModalTarget] = useState<PipelineTraceModalTarget | null>(
+    null,
+  );
 
   const {
     items,
@@ -100,35 +107,54 @@ export default function ReviewQueuePage(): React.ReactElement {
       ) : null}
 
       <ul className="queue-list">
-        {items.map((item) => (
-          <li key={item.id}>
-            <Link
-              href={`/transactions/${item.transactionId}?tenant_id=${encodeURIComponent(tenantId ?? "")}`}
-              className="queue-item queue-item--clickable"
-            >
-              <div className="queue-item__header">
-                <span className="queue-item__vendor">{item.vendorRaw}</span>
-                <span className="queue-item__amount">
-                  {item.amount} {item.currency}
-                </span>
-                <ReasonBadge reason={item.reason} />
-                <DecisionBadge decision={item.taggingDecision} />
-                {item.suggestedGlCode ? (
-                  <span
-                    className="badge badge--reason"
-                    style={{ background: "#f1f5f9", color: "#475569" }}
+        {items.map((item) => {
+          const detailHref = `/transactions/${item.transactionId}?tenant_id=${encodeURIComponent(tenantId ?? "")}&run_id=${encodeURIComponent(item.runId)}`;
+          return (
+            <li key={item.id}>
+              <div className="queue-item queue-item--with-trace">
+                <Link href={detailHref} className="queue-item--clickable">
+                  <div className="queue-item__header">
+                    <span className="queue-item__vendor">{item.vendorRaw}</span>
+                    <span className="queue-item__amount">
+                      {item.amount} {item.currency}
+                    </span>
+                    <ReasonBadge reason={item.reason} />
+                    <DecisionBadge decision={item.taggingDecision} />
+                    {item.suggestedGlCode ? (
+                      <span
+                        className="badge badge--reason"
+                        style={{ background: "#f1f5f9", color: "#475569" }}
+                      >
+                        GL {item.suggestedGlCode}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="queue-item__meta" style={{ marginBottom: 0 }}>
+                    <code>{item.externalTransactionId}</code> · confidence {item.confidence ?? "—"}
+                  </p>
+                  <span className="queue-item__footer">Why &amp; override →</span>
+                </Link>
+                <div className="queue-item__trace-actions">
+                  <button
+                    type="button"
+                    className="btn btn--secondary"
+                    style={{ padding: "0.35rem 0.75rem", fontSize: "0.8125rem" }}
+                    onClick={() =>
+                      setTraceModalTarget({
+                        transactionId: item.transactionId,
+                        runId: item.runId,
+                        vendorRaw: item.vendorRaw,
+                        externalTransactionId: item.externalTransactionId,
+                      })
+                    }
                   >
-                    GL {item.suggestedGlCode}
-                  </span>
-                ) : null}
+                    Pipeline trace
+                  </button>
+                </div>
               </div>
-              <p className="queue-item__meta" style={{ marginBottom: 0 }}>
-                <code>{item.externalTransactionId}</code> · confidence {item.confidence ?? "—"}
-              </p>
-              <span className="queue-item__footer">Why &amp; override →</span>
-            </Link>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
 
       {hasMore ? (
@@ -143,6 +169,13 @@ export default function ReviewQueuePage(): React.ReactElement {
           </button>
         </div>
       ) : null}
+
+      <PipelineTraceModal
+        open={traceModalTarget !== null}
+        onClose={() => setTraceModalTarget(null)}
+        tenantId={tenantId}
+        target={traceModalTarget}
+      />
     </PageLayout>
   );
 }

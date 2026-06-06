@@ -19,7 +19,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body: unknown = await request.json();
     const parsed = receiptUploadSchema.parse(body);
 
-    return await withTenantAccess(request, parsed.tenant_id, async (db) => {
+    return await withTenantAccess(
+      request,
+      parsed.tenant_id,
+      async (db) => {
       const txnRows = await db
         .select({ id: transactions.id })
         .from(transactions)
@@ -67,7 +70,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         transaction_id: parsed.transaction_id,
         cleared_at: clearedAt.toISOString(),
       });
-    });
+    },
+      { permission: "review:write" },
+    );
   } catch (error) {
     return toRouteErrorResponse(error, "Receipt upload failed");
   }
