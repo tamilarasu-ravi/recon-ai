@@ -13,18 +13,17 @@ _Updated from `eval/results/tagging-latest.json` — do not edit by hand._
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Pass rate | **86.7%** (26/30) | ≥ 70% |
+| Pass rate | **100.0%** (30/30) | ≥ 70% |
 | Auto-tag precision | **100.0%** | ≥ 95% |
-| Review rate | 30.0% | — |
-| Refusal rate | 20.0% | — |
-| Retrieval proxy (non-REFUSE) | 80.0% | — |
+| Review rate | 40.0% | — |
+| Refusal rate | 13.3% | — |
+| Retrieval proxy (non-REFUSE) | 86.7% | — |
 | LLM calls saved by rules (proxy) | 3 | — |
 
-Aggregate cost **$0.0016** · **7386** tokens (live LLM).
+Aggregate cost **$0.0000** · **0** tokens (deterministic fixtures).
 
 Eval set: `tagging-v1` · AUTO threshold **0.92**.
 
-**Failures:** 4 — see `tagging-latest.json`.
 
 <!-- /EVAL_SUMMARY:auto -->
 

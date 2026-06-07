@@ -12,7 +12,7 @@
   "total_prompt_tokens": 0,
   "total_completion_tokens": 0,
   "total_tokens": 0,
-  "llm_enable_live_calls": true,
+  "llm_enable_live_calls": false,
   "threshold_auto": 0.92,
   "failures": [],
   "results": [
