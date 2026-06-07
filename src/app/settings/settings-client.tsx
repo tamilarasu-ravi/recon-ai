@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { ObservabilitySloPanel } from "@/app/components/observability-slo-panel";
 import { BulkImportPanel } from "@/app/settings/bulk-import-panel";
 import { DevIngestPanel } from "@/app/settings/dev-ingest-panel";
 import { PageLayout } from "@/app/components/page-layout";
@@ -537,6 +538,8 @@ export function SettingsClient(): React.ReactElement {
           </div>
         )}
       </section>
+
+      <ObservabilitySloPanel />
     </PageLayout>
   );
 }

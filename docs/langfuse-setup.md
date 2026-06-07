@@ -15,8 +15,19 @@ LANGFUSE_HOST=https://cloud.langfuse.com
 ## Behavior
 
 - Each `appendAuditLog` call exports a **trace** with `id = run_id` (correlates with Postgres `events` / `audit_log`).
+- LangGraph **node spans** (`evaluatePolicy`, `runTagging`, …) mirror `graph_steps` from audit observability.
 - When `cost_usd` / `model` appear in observability, a child **generation** span is attached.
 - Failures are logged to stderr only; they never fail the pipeline.
+
+## SLO dashboard (in-app)
+
+**Settings → Observability & SLOs** shows:
+
+- Langfuse active/off
+- Measured **p50 / p95 graph latency** from recent `audit_log` tagging runs
+- Pass/fail vs **30s p95** target and eval precision gate (`pnpm eval:gate`)
+
+API: `GET /api/observability/status` (runtime flags) · tenant samples on `GET /api/metrics`.
 
 ## Verify
 

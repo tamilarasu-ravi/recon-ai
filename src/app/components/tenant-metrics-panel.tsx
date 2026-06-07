@@ -90,6 +90,19 @@ export function TenantMetricsPanel(): React.ReactElement {
         <span className="stat__label">Live LLM runs</span>
         <span className="stat__value">{metrics.llmRunsWithLiveCall}</span>
       </div>
+      {metrics.slo.decisionLatencyP95Ms !== null ? (
+        <div className="stat">
+          <span className="stat__label">p95 graph latency</span>
+          <span className="stat__value">
+            {Math.round(metrics.slo.decisionLatencyP95Ms)}ms
+            {metrics.slo.sloDecisionLatencyMet ? (
+              <span className="badge badge--auto" style={{ marginLeft: "0.35rem", fontSize: "0.6875rem" }}>
+                SLO
+              </span>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

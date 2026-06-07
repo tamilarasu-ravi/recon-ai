@@ -85,6 +85,23 @@ export async function exportAuditToLangfuse(input: AppendAuditInput): Promise<vo
     },
   });
 
+  const graphSteps = Array.isArray(observability.graph_steps)
+    ? (observability.graph_steps as Array<{ node?: string; latency_ms?: number; status?: string }>)
+    : [];
+
+  for (const step of graphSteps) {
+    if (!step?.node) {
+      continue;
+    }
+    trace.span({
+      name: step.node,
+      metadata: {
+        latency_ms: step.latency_ms,
+        status: step.status,
+      },
+    });
+  }
+
   if (model !== undefined || costUsd !== undefined || promptTokens !== undefined) {
     trace.generation({
       name: `${input.agent}_llm`,

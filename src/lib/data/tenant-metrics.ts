@@ -1,7 +1,9 @@
 import { and, count, eq, sql } from "drizzle-orm";
 
 import type { DbClient } from "@/lib/db/client";
+import { getTenantSloMetrics } from "@/lib/data/tenant-slo-metrics";
 import { auditLog, invoices, reviewQueue, transactions } from "@/lib/db/schema";
+import type { SloSnapshot } from "@/lib/observability/slo-metrics";
 
 export interface TenantMetricsDto {
   transactionsTotal: number;
@@ -16,6 +18,7 @@ export interface TenantMetricsDto {
   llmPromptTokensTotal: number;
   llmCompletionTokensTotal: number;
   llmRunsWithLiveCall: number;
+  slo: SloSnapshot;
 }
 
 /**
@@ -63,6 +66,7 @@ export async function getTenantMetrics(
   const transactionsTotal = Number(txnStats?.total ?? 0);
   const autoTagCount = Number(txnStats?.autoTag ?? 0);
   const autoTagRate = transactionsTotal > 0 ? autoTagCount / transactionsTotal : 0;
+  const slo = await getTenantSloMetrics(db, tenantId);
 
   return {
     transactionsTotal,
@@ -77,5 +81,6 @@ export async function getTenantMetrics(
     llmPromptTokensTotal: Number(llmCostStats?.promptTokens ?? 0),
     llmCompletionTokensTotal: Number(llmCostStats?.completionTokens ?? 0),
     llmRunsWithLiveCall: Number(llmCostStats?.liveCalls ?? 0),
+    slo,
   };
 }
