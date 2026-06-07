@@ -3,6 +3,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+import {
+  isCloudflareRuntime,
+  isHyperdriveConnectionString,
+  resolveDatabaseConnectionString,
+} from "@/lib/db/resolve-connection-string";
 import * as schema from "./schema";
 
 type PostgresClient = ReturnType<typeof postgres>;
@@ -24,16 +29,21 @@ const managedClients: PostgresClient[] = [];
  * @throws Error if connectionString is missing and DATABASE_URL is unset.
  */
 export function createDb(connectionString?: string) {
-  const url = connectionString ?? process.env.DATABASE_URL;
+  const url = connectionString ?? resolveDatabaseConnectionString();
   if (!url) {
-    throw new Error("DATABASE_URL is required");
+    throw new Error(
+      "DATABASE_URL is required (or configure a Cloudflare Hyperdrive binding named HYPERDRIVE)",
+    );
   }
 
-  const isServerless = Boolean(process.env.VERCEL);
+  const viaHyperdrive = isHyperdriveConnectionString(url);
+  const isServerless = Boolean(process.env.VERCEL) || isCloudflareRuntime() || viaHyperdrive;
   const client = postgres(url, {
     max: isServerless ? 1 : 10,
     // Required when using Neon/Vercel pooler (PgBouncer transaction mode).
     prepare: isServerless ? false : undefined,
+    // Hyperdrive terminates TLS to Neon; the Worker→Hyperdrive hop is plain TCP.
+    ssl: viaHyperdrive ? false : undefined,
   });
   managedClients.push(client);
   return drizzle(client, { schema });

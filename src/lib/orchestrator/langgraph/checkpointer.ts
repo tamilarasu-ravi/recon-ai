@@ -2,6 +2,8 @@ import { MemorySaver } from "@langchain/langgraph";
 import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
+import { resolveDatabaseConnectionString } from "@/lib/db/resolve-connection-string";
+
 export type CheckpointerBackend = "postgres" | "memory";
 
 let checkpointerInstance: BaseCheckpointSaver | null = null;
@@ -33,9 +35,11 @@ async function createCheckpointer(): Promise<BaseCheckpointSaver> {
     return new MemorySaver();
   }
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = resolveDatabaseConnectionString();
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required for LANGGRAPH_CHECKPOINTER=postgres");
+    throw new Error(
+      "DATABASE_URL is required for LANGGRAPH_CHECKPOINTER=postgres (or Hyperdrive binding HYPERDRIVE)",
+    );
   }
 
   const postgresSaver = PostgresSaver.fromConnString(connectionString);
