@@ -1,5 +1,3 @@
-import { resolveDatabaseConnectionString } from "@/lib/db/resolve-connection-string";
-
 /**
  * Deployment/runtime helpers — distinguish local dev from Vercel production.
  */
@@ -41,11 +39,10 @@ export interface ProductionConfigIssue {
 export function collectProductionConfigIssues(): ProductionConfigIssue[] {
   const issues: ProductionConfigIssue[] = [];
 
-  if (!resolveDatabaseConnectionString()) {
+  if (!process.env.DATABASE_URL?.trim()) {
     issues.push({
       code: "database_url_missing",
-      message:
-        "DATABASE_URL is required (or configure Cloudflare Hyperdrive binding HYPERDRIVE)",
+      message: "DATABASE_URL is required",
       severity: "error",
     });
   }

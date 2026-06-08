@@ -2,8 +2,6 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
-import { resolveDatabaseConnectionString } from "@/lib/db/resolve-connection-string";
-
 const llmProviderSchema = z.enum(["google", "openai", "anthropic"]);
 
 type LlmProvider = z.infer<typeof llmProviderSchema>;
@@ -134,15 +132,7 @@ function alignModelsForProvider(env: AppEnv): AppEnv {
  * @throws Error when live calls are enabled but no API key is available for the provider.
  */
 export function loadEnv(): AppEnv {
-  const envInput = { ...process.env };
-  if (!envInput.DATABASE_URL?.trim()) {
-    const resolvedDatabaseUrl = resolveDatabaseConnectionString();
-    if (resolvedDatabaseUrl) {
-      envInput.DATABASE_URL = resolvedDatabaseUrl;
-    }
-  }
-
-  const parsed = envSchema.parse(envInput);
+  const parsed = envSchema.parse(process.env);
   const declaredProvider = parsed.LLM_PROVIDER;
   const resolvedProvider = resolveLlmProvider(parsed);
 
