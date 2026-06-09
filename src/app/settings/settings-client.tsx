@@ -339,45 +339,47 @@ export function SettingsClient(): React.ReactElement {
         </p>
       ) : null}
 
-      <section className="panel" style={{ marginBottom: "1.5rem" }}>
-        <h2 className="panel__title">Browser API key</h2>
-        <p className="panel__desc">
-          Stored in sessionStorage and sent as <code>Authorization: Bearer</code> on API calls.
-          Required when <code>REQUIRE_API_AUTH=true</code>.
-        </p>
-        <div className="form-field" style={{ marginBottom: "0.75rem" }}>
-          <input
-            className="input"
-            value={apiKeyInput}
-            onChange={(e) => setApiKeyInput(e.target.value)}
-            placeholder="recon_…"
-            aria-label="API key"
-          />
-        </div>
-        <div className="btn-group">
-          <button
-            type="button"
-            className="btn btn--secondary"
-            disabled={actionLoading}
-            onClick={saveBrowserKey}
-          >
-            Save for this browser
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary"
-            disabled={actionLoading}
-            onClick={clearSavedBrowserKey}
-          >
-            Clear saved key
-          </button>
-        </div>
-        <p className="panel__desc" style={{ marginTop: "0.75rem" }}>
-          Stuck on &quot;Invalid or inactive API key&quot;? In the project folder run{" "}
-          <code>pnpm auth:reset-keys</code>, copy the printed <code>recon_…</code> value, paste
-          above, and Save.
-        </p>
-      </section>
+      {requireApiAuth ? (
+        <section className="panel" style={{ marginBottom: "1.5rem" }}>
+          <h2 className="panel__title">Browser API key</h2>
+          <p className="panel__desc">
+            Stored in sessionStorage and sent as <code>Authorization: Bearer</code> on API calls.
+            Required when <code>REQUIRE_API_AUTH=true</code>.
+          </p>
+          <div className="form-field" style={{ marginBottom: "0.75rem" }}>
+            <input
+              className="input"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              placeholder="recon_…"
+              aria-label="API key"
+            />
+          </div>
+          <div className="btn-group">
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={actionLoading}
+              onClick={saveBrowserKey}
+            >
+              Save for this browser
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={actionLoading}
+              onClick={clearSavedBrowserKey}
+            >
+              Clear saved key
+            </button>
+          </div>
+          <p className="panel__desc" style={{ marginTop: "0.75rem" }}>
+            Stuck on &quot;Invalid or inactive API key&quot;? In the project folder run{" "}
+            <code>pnpm auth:reset-keys</code>, copy the printed <code>recon_…</code> value, paste
+            above, and Save.
+          </p>
+        </section>
+      ) : null}
 
       <DevIngestPanel tenantId={tenantId} disabled={actionLoading} />
 
