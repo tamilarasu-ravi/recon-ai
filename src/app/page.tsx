@@ -75,7 +75,7 @@ export default function HomePage(): React.ReactElement {
         </div>
         <p style={{ margin: "1rem 0 0", fontSize: "0.9375rem", color: "var(--color-text-muted)", maxWidth: "42rem" }}>
           New here? <Link href="/review-queue/new">Add a sample transaction</Link> with tenant-aware
-          presets — or read <code>docs/production-roadmap.md</code> for deploy checklists.
+          presets
         </p>
       </section>
 
