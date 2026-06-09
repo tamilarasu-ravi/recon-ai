@@ -5,6 +5,7 @@ import { loadNormalizedPolicyRules } from "@/lib/data/policy-admin";
 import { policies } from "@/lib/db/schema";
 import {
   bannedMccRuleConfigSchema,
+  policyRuleConfigByType,
   type PolicyEvaluationInput,
   type PolicyEvaluationResult,
   type PolicyOutcome,
@@ -151,10 +152,18 @@ export async function evaluateTransactionPolicy(
 
   const ruleRows = await loadNormalizedPolicyRules(db, active.id);
 
-  const rules: PolicyRuleRow[] = ruleRows.map((row) => ({
-    ruleType: row.ruleType,
-    ruleConfig: row.ruleConfig,
-  }));
+  const rules: PolicyRuleRow[] = ruleRows.flatMap((row) => {
+    if (!(row.ruleType in policyRuleConfigByType)) {
+      return [];
+    }
+
+    return [
+      {
+        ruleType: row.ruleType as PolicyRuleType,
+        ruleConfig: row.ruleConfig,
+      },
+    ];
+  });
 
   return evaluatePolicyRules(active.policyVersion, active.id, rules, input);
 }
