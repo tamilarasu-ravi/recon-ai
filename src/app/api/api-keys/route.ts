@@ -8,7 +8,7 @@ import {
   canBootstrapApiKey,
   resolveTenantIdBySlug,
 } from "@/lib/auth/bootstrap-api-key";
-import { isApiAuthRequired, isProductionDeployment } from "@/lib/config/runtime";
+import { isApiAuthRequired } from "@/lib/config/runtime";
 import { getDb } from "@/lib/db/client";
 import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
 
@@ -81,7 +81,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       return runWithTenantRls(tenantId, async () => {
         const db = getDb();
-        const authRequired = isApiAuthRequired() || isProductionDeployment();
+        const authRequired = isApiAuthRequired();
         const allowBootstrap = authRequired && (await canBootstrapApiKey(db, tenantId));
 
         if (allowBootstrap) {

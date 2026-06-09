@@ -4,7 +4,7 @@ import { validateApiKey, extractApiKeyFromRequest } from "@/lib/auth/api-auth";
 import { isSsoEnabled } from "@/lib/auth/sso-config";
 import type { TenantAuthContext } from "@/lib/auth/tenant-auth-types";
 import { getMembershipForTenant, userHasAnyMembership } from "@/lib/auth/tenant-membership";
-import { isApiAuthRequired, isProductionDeployment } from "@/lib/config/runtime";
+import { isApiAuthRequired } from "@/lib/config/runtime";
 import type { DbClient } from "@/lib/db/client";
 
 const API_KEY_ADMIN_ROLE = "admin" as const;
@@ -15,7 +15,7 @@ const API_KEY_ADMIN_ROLE = "admin" as const;
  * @returns Whether auth is mandatory.
  */
 export function isAuthEnforced(): boolean {
-  return isApiAuthRequired() || isProductionDeployment() || isSsoEnabled();
+  return isApiAuthRequired() || isSsoEnabled();
 }
 
 /**
@@ -78,7 +78,7 @@ export async function resolveTenantAuth(
     return sessionContext;
   }
 
-  if (isApiAuthRequired() || isProductionDeployment()) {
+  if (isApiAuthRequired()) {
     throw new Error("API key required — use Authorization: Bearer <key>");
   }
 

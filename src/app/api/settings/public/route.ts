@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { isApiAuthRequired, isProductionDeployment } from "@/lib/config/runtime";
+import { isApiAuthRequired } from "@/lib/config/runtime";
 import { getQuickBooksConfig } from "@/lib/integrations/erp/quickbooks/config";
 import { getObservabilityRuntimeStatus } from "@/lib/observability/runtime-status";
 
@@ -12,7 +12,7 @@ export async function GET(): Promise<NextResponse> {
   const observability = getObservabilityRuntimeStatus();
 
   return NextResponse.json({
-    require_api_auth: isApiAuthRequired() || isProductionDeployment(),
+    require_api_auth: isApiAuthRequired(),
     erp_provider: erpProvider,
     quickbooks_oauth_configured: getQuickBooksConfig() !== null,
     langfuse_enabled: observability.langfuse_enabled,

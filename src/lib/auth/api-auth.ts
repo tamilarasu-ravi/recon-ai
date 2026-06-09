@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { hashApiKey } from "@/lib/auth/api-key-crypto";
-import { isApiAuthRequired, isProductionDeployment } from "@/lib/config/runtime";
+import { isApiAuthRequired } from "@/lib/config/runtime";
 import type { DbClient } from "@/lib/db/client";
 import { apiKeys } from "@/lib/db/schema";
 
@@ -77,7 +77,7 @@ export async function authorizeApiRequest(
   db: DbClient,
   request: Request,
 ): Promise<ApiAuthContext | null> {
-  if (!isApiAuthRequired() && !isProductionDeployment()) {
+  if (!isApiAuthRequired()) {
     return null;
   }
 

@@ -3,6 +3,7 @@ import { config as loadDotenv } from "dotenv";
 
 import { createDb } from "@/lib/db/client";
 import { runCliScript } from "./lib/close-cli-resources.js";
+import { seedDemoReviewQueueForAllTenants } from "./lib/seed-demo-review-queue.js";
 import { applyTransactionOverride } from "@/lib/orchestrator/apply-override";
 import { getTenantIdBySlug, runApPipeline } from "@/lib/orchestrator/run-ap-pipeline";
 import { reprocessTransactionTagging } from "@/lib/orchestrator/reprocess-tagging";
@@ -235,7 +236,10 @@ async function main(): Promise<void> {
     throw new Error(`Expected REFUSE for unknown vendor, got ${refuseResult.decision}`);
   }
 
-  console.log("\n✅ Demo complete — all steps passed (incl. REFUSE).");
+  const reviewQueueSeed = await seedDemoReviewQueueForAllTenants(db);
+  logStep("10. Review queue showcase (30 per tenant — open + resolved)", reviewQueueSeed);
+
+  console.log("\n✅ Demo complete — all steps passed (incl. REFUSE + review queue seed).");
 }
 
 runCliScript(main);
