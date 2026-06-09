@@ -74,3 +74,9 @@ Feature inventory: [`docs/product-roadmap.md`](./docs/product-roadmap.md).
 ## Capstone origin
 
 This codebase began as an AI Engineering capstone (June 2026). Capstone timeline, submission checklist, and showcase artifacts live under [`docs/capstone/`](./docs/capstone/README.md). **Product direction is governed by this file and the roadmap**, not the academic deadline.
+
+## v2 — Agentic evidence (`develop` only)
+
+`main` is frozen for the Jun 14 showcase. Post-showcase / interview-track work adds **conditional retrieval, evidence planner, and verifier** behind `AGENTIC_EVIDENCE_ENABLED`.
+
+**Implementation plan (source of truth):** [`planning/agentic-v2-implementation-plan.md`](./planning/agentic-v2-implementation-plan.md)
