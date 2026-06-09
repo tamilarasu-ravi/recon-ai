@@ -137,6 +137,10 @@ export async function GET(
 
       const pendingEvent = eventRows.find((event) => event.eventType === "AutoTagPendingApproval");
 
+      const coaOptions = [...coaRows]
+        .sort((left, right) => left.glCode.localeCompare(right.glCode))
+        .map((row) => ({ glCode: row.glCode, glName: row.glName }));
+
       return NextResponse.json({
         transaction: {
           ...txn,
@@ -149,6 +153,7 @@ export async function GET(
                 ? new Date(String(txn.erpPostedAt)).toISOString()
                 : null,
         },
+        coa_options: coaOptions,
         review_queue: reviewRows,
         receipt,
         audit_trail: auditRows,

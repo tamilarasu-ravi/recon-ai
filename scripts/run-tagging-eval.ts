@@ -2,16 +2,24 @@ import { createHash } from "node:crypto";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { config as loadDotenv } from "dotenv";
-import { and, eq, like, not } from "drizzle-orm";
+import { and, desc, eq, like, not } from "drizzle-orm";
 import { loadEnv } from "@/lib/config/env";
 import { getDb, getRootDb } from "@/lib/db/client";
 import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
 import { closeCliResources, runCliScript } from "./lib/close-cli-resources.js";
 import type { DbClient } from "@/lib/db/client";
 import { auditLog, chartOfAccounts, tenants, transactions, vendorRules, vendors } from "@/lib/db/schema";
+import {
+  computeRetrievalRecallAt5,
+  didRetrievalRecallHit,
+  isRetrievalRecallEligible,
+  RETRIEVAL_RECALL_AT_5_TARGET,
+  type RetrievalRecallCaseResult,
+} from "@/lib/eval/retrieval-recall";
 import { parseLlmUsageFromObservability } from "@/lib/observability/llm-cost";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
+import { parseRetrievalFromObservability } from "@/lib/ui/parse-retrieval";
 
 loadDotenv({ path: ".env.local" });
 loadDotenv({ path: ".env" });
@@ -30,6 +38,10 @@ interface EvalCase {
   expected_decision: TaggingDecision;
   expected_gl_code?: string;
   notes?: string;
+  /** When false, excluded from retrieval recall@5 denominator. */
+  expect_retrieval_recall?: boolean;
+  /** Human-readable failure mode this case guards against (Phase 6 eval plan). */
+  failure_mode?: string;
 }
 
 interface EvalCaseResult {
@@ -125,7 +137,7 @@ async function main(): Promise<void> {
   let autoTagTotal = 0;
   let autoTagCorrect = 0;
   let llmCallsSavedByRules = 0;
-  let retrievalHits = 0;
+  const retrievalRecallCases: RetrievalRecallCaseResult[] = [];
   let totalCostUsd = 0;
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
@@ -202,14 +214,11 @@ async function main(): Promise<void> {
           llmCallsSavedByRules += 1;
         }
 
-        if (actualDecision !== "REFUSE") {
-          retrievalHits += 1;
-        }
-
         const [taggingAudit] = await scopedDb
           .select({ observability: auditLog.observability })
           .from(auditLog)
           .where(and(eq(auditLog.runId, pipelineResult.runId), eq(auditLog.agent, "tagging")))
+          .orderBy(desc(auditLog.createdAt))
           .limit(1);
 
         if (taggingAudit?.observability && typeof taggingAudit.observability === "object") {
@@ -220,6 +229,27 @@ async function main(): Promise<void> {
           totalPromptTokens += usage.promptTokens;
           totalCompletionTokens += usage.completionTokens;
         }
+
+        const recallEligible = isRetrievalRecallEligible(evalCase);
+        let neighborGlCodes: string[] = [];
+        if (taggingAudit?.observability) {
+          const parsed = parseRetrievalFromObservability(taggingAudit.observability);
+          neighborGlCodes =
+            parsed?.neighbors
+              .map((neighbor) => neighbor.glCode)
+              .filter((code): code is string => code !== null) ?? [];
+        }
+
+        retrievalRecallCases.push({
+          id: evalCase.id,
+          eligible: recallEligible,
+          hit:
+            recallEligible && evalCase.expected_gl_code
+              ? didRetrievalRecallHit(taggingAudit?.observability, evalCase.expected_gl_code)
+              : null,
+          expected_gl_code: evalCase.expected_gl_code,
+          neighbor_gl_codes: neighborGlCodes,
+        });
 
         results.push({
           id: evalCase.id,
@@ -245,6 +275,9 @@ async function main(): Promise<void> {
   const refusalRate =
     results.filter((row) => row.actual_decision === "REFUSE").length / results.length;
   const passRate = results.filter((row) => row.passed).length / results.length;
+  const retrievalRecallAt5 = computeRetrievalRecallAt5(retrievalRecallCases);
+  const retrievalRecallEligibleCount = retrievalRecallCases.filter((row) => row.eligible).length;
+  const retrievalRecallHitCount = retrievalRecallCases.filter((row) => row.hit === true).length;
 
   const summary = {
     eval_set_version: EVAL_SET_VERSION,
@@ -254,7 +287,10 @@ async function main(): Promise<void> {
     auto_tag_precision: Number(precision.toFixed(4)),
     review_rate: Number(reviewRate.toFixed(4)),
     refusal_rate: Number(refusalRate.toFixed(4)),
-    retrieval_proxy_rate: Number((retrievalHits / results.length).toFixed(4)),
+    retrieval_recall_at_5: retrievalRecallAt5,
+    retrieval_recall_eligible_count: retrievalRecallEligibleCount,
+    retrieval_recall_hit_count: retrievalRecallHitCount,
+    retrieval_recall_cases: retrievalRecallCases,
     llm_calls_saved_by_rules: llmCallsSavedByRules,
     total_cost_usd: Number(totalCostUsd.toFixed(6)),
     total_prompt_tokens: totalPromptTokens,
@@ -275,6 +311,9 @@ async function main(): Promise<void> {
   console.log(`  auto_tag_precision: ${(summary.auto_tag_precision * 100).toFixed(1)}%`);
   console.log(`  review_rate: ${(summary.review_rate * 100).toFixed(1)}%`);
   console.log(`  refusal_rate: ${(summary.refusal_rate * 100).toFixed(1)}%`);
+  console.log(
+    `  retrieval_recall@5: ${(summary.retrieval_recall_at_5 * 100).toFixed(1)}% (${retrievalRecallHitCount}/${retrievalRecallEligibleCount} eligible)`,
+  );
   console.log(`  total_cost_usd: ${summary.total_cost_usd}`);
   console.log(`  total_tokens: ${summary.total_tokens}`);
   console.log(`  results: ${RESULTS_FILE}`);
@@ -292,6 +331,20 @@ async function main(): Promise<void> {
 
   if (passRate < 0.7) {
     console.error("Eval pass rate below 70% — investigate failures");
+    await closeCliResources();
+    process.exit(1);
+  }
+
+  if (summary.retrieval_recall_at_5 < RETRIEVAL_RECALL_AT_5_TARGET) {
+    const misses = retrievalRecallCases.filter((row) => row.eligible && row.hit !== true);
+    console.error(
+      `Retrieval recall@5 ${(summary.retrieval_recall_at_5 * 100).toFixed(1)}% below ${(RETRIEVAL_RECALL_AT_5_TARGET * 100).toFixed(0)}% target`,
+    );
+    for (const miss of misses) {
+      console.error(
+        `  ${miss.id}: expected GL ${miss.expected_gl_code}, neighbors=[${miss.neighbor_gl_codes.join(", ")}]`,
+      );
+    }
     await closeCliResources();
     process.exit(1);
   }

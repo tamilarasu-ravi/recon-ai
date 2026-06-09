@@ -77,8 +77,8 @@ export function PipelineWorkflowTrace({
         </span>
       </div>
       <p className="panel__desc">
-        Real steps from this run — ingest, pgvector embedding, policy, RAG neighbors, LLM tokens, and
-        tri-state gate.
+        How each expense was processed — policy checks, similar expense lookup, and the coding
+        decision.
       </p>
 
       {error ? <p className="alert alert--error">{error}</p> : null}
@@ -224,7 +224,7 @@ function WorkflowTraceStepItem({ step, index }: WorkflowTraceStepItemProps): Rea
 
       {neighbors.length > 0 ? (
         <div className="workflow-trace__neighbors">
-          <p className="workflow-trace__chunk-label">RAG neighbors (top {neighbors.length})</p>
+          <p className="workflow-trace__chunk-label">Similar expenses (top {neighbors.length})</p>
           <ul className="workflow-trace__neighbor-list">
             {neighbors.map((neighbor, neighborIndex) => (
               <li key={`${neighbor.external_transaction_id ?? neighborIndex}`}>

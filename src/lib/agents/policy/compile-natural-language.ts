@@ -113,9 +113,10 @@ export async function compileAndOptionalPersistPolicy(
   return {
     ...compileResult,
     persisted: {
-      ruleId: created.id,
-      ruleType: created.ruleType,
-      ruleConfig: created.ruleConfig,
+      ruleId: created.rule.id,
+      ruleType: created.rule.ruleType,
+      ruleConfig: created.rule.ruleConfig,
+      replaced: created.replaced,
     },
   };
 }

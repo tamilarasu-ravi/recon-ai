@@ -13,7 +13,7 @@ interface GraphStepsTimelineProps {
  */
 export function GraphStepsTimeline({
   steps,
-  title = "LangGraph orchestrator",
+  title = "Processing path",
 }: GraphStepsTimelineProps): React.ReactElement | null {
   if (steps.length === 0) {
     return null;

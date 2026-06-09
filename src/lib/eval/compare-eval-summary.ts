@@ -4,6 +4,7 @@ export interface EvalSummaryMetrics {
   case_count: number;
   pass_rate: number;
   auto_tag_precision: number;
+  retrieval_recall_at_5?: number;
   llm_enable_live_calls?: boolean;
   failures?: Array<{ id: string; actual_decision: string }>;
   results?: Array<{ id: string; actual_decision: string }>;
@@ -25,6 +26,7 @@ export interface EvalGateOptions {
 const DEFAULT_PASS_RATE_TOLERANCE = 0.02;
 const DEFAULT_PRECISION_TOLERANCE = 0.01;
 const RED_TEAM_CASE_ID = "case-08";
+const RETRIEVAL_RECALL_AT_5_FLOOR = 0.8;
 
 /**
  * Compares a fresh eval run against the committed baseline and returns gate issues.
@@ -74,6 +76,30 @@ export function compareEvalSummaries(
     issues.push({
       code: "auto_tag_precision_regression",
       message: `auto_tag_precision ${latest.auto_tag_precision.toFixed(4)} below floor ${precisionFloor.toFixed(4)}.`,
+      severity: "error",
+    });
+  }
+
+  if (
+    latest.retrieval_recall_at_5 !== undefined &&
+    latest.retrieval_recall_at_5 < RETRIEVAL_RECALL_AT_5_FLOOR
+  ) {
+    issues.push({
+      code: "retrieval_recall_at_5_below_target",
+      message: `retrieval_recall_at_5 ${latest.retrieval_recall_at_5.toFixed(4)} below floor ${RETRIEVAL_RECALL_AT_5_FLOOR.toFixed(4)}.`,
+      severity: "error",
+    });
+  }
+
+  const baselineRecall = baseline.retrieval_recall_at_5;
+  if (
+    baselineRecall !== undefined &&
+    latest.retrieval_recall_at_5 !== undefined &&
+    latest.retrieval_recall_at_5 < baselineRecall - passTolerance
+  ) {
+    issues.push({
+      code: "retrieval_recall_regression",
+      message: `retrieval_recall_at_5 ${latest.retrieval_recall_at_5.toFixed(4)} below floor ${(baselineRecall - passTolerance).toFixed(4)} (baseline ${baselineRecall.toFixed(4)}).`,
       severity: "error",
     });
   }

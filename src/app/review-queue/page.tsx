@@ -13,6 +13,12 @@ import { ReasonBadge } from "@/app/components/ui/reason-badge";
 import { useTenant } from "@/app/components/tenant-provider";
 import { useReviewQueue } from "@/lib/ui/use-review-queue";
 
+const QUEUE_STATUS_LABELS: Record<"open" | "resolved" | "all", string> = {
+  open: "Open",
+  resolved: "Resolved",
+  all: "All",
+};
+
 /**
  * Review queue list with status filter, client cache, and cursor pagination.
  *
@@ -47,7 +53,7 @@ export default function ReviewQueuePage(): React.ReactElement {
   return (
     <PageLayout
       title="Review queue"
-      subtitle="Transactions in QUEUE_REVIEW or REFUSE awaiting accountant action."
+      subtitle="Expenses that need accountant review or could not be classified automatically."
       loading={isQueueBusy}
       blocking={isQueueBusy}
       blockingLabel={
@@ -74,7 +80,7 @@ export default function ReviewQueuePage(): React.ReactElement {
               onClick={() => setStatus(value)}
               disabled={isQueueBusy}
             >
-              {value}
+              {QUEUE_STATUS_LABELS[value]}
             </button>
           ))}
         </div>
@@ -103,7 +109,19 @@ export default function ReviewQueuePage(): React.ReactElement {
       {error ? <p className="alert alert--error">{error}</p> : null}
 
       {!loading && !error && items.length === 0 ? (
-        <div className="empty-state">No items for this filter.</div>
+        <div className="empty-state">
+          <p style={{ margin: "0 0 0.75rem" }}>
+            {status === "open"
+              ? "Nothing needs review right now."
+              : "No items match this filter."}
+          </p>
+          {status === "open" ? (
+            <p style={{ margin: 0, fontSize: "0.9375rem" }}>
+              <Link href="/review-queue/new">Add a sample transaction</Link> to see tagging and
+              review in action.
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       <ul className="queue-list">
@@ -125,14 +143,14 @@ export default function ReviewQueuePage(): React.ReactElement {
                         className="badge badge--reason"
                         style={{ background: "#f1f5f9", color: "#475569" }}
                       >
-                        GL {item.suggestedGlCode}
+                        Suggested {item.suggestedGlCode}
                       </span>
                     ) : null}
                   </div>
                   <p className="queue-item__meta" style={{ marginBottom: 0 }}>
-                    <code>{item.externalTransactionId}</code> · confidence {item.confidence ?? "—"}
+                    Ref {item.externalTransactionId} · confidence {item.confidence ?? "—"}
                   </p>
-                  <span className="queue-item__footer">Why &amp; override →</span>
+                  <span className="queue-item__footer">Review &amp; override →</span>
                 </Link>
                 <div className="queue-item__trace-actions">
                   <button
@@ -148,7 +166,7 @@ export default function ReviewQueuePage(): React.ReactElement {
                       })
                     }
                   >
-                    Pipeline trace
+                    View steps
                   </button>
                 </div>
               </div>

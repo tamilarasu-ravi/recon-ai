@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 
 import type { DbClient } from "@/lib/db/client";
-import { policies, policyRules } from "@/lib/db/schema";
+import { loadNormalizedPolicyRules } from "@/lib/data/policy-admin";
+import { policies } from "@/lib/db/schema";
 import {
   bannedMccRuleConfigSchema,
   type PolicyEvaluationInput,
@@ -148,16 +149,10 @@ export async function evaluateTransactionPolicy(
     };
   }
 
-  const ruleRows = await db
-    .select({
-      ruleType: policyRules.ruleType,
-      ruleConfig: policyRules.ruleConfig,
-    })
-    .from(policyRules)
-    .where(eq(policyRules.policyId, active.id));
+  const ruleRows = await loadNormalizedPolicyRules(db, active.id);
 
   const rules: PolicyRuleRow[] = ruleRows.map((row) => ({
-    ruleType: row.ruleType as PolicyRuleType,
+    ruleType: row.ruleType,
     ruleConfig: row.ruleConfig,
   }));
 

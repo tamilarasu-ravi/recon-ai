@@ -1,5 +1,5 @@
 import { config as loadDotenv } from "dotenv";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import {
   buildDeterministicEmbedding,
@@ -16,7 +16,6 @@ import { runWithRlsBypass } from "@/lib/db/tenant-rls";
 import { runCliScript } from "./lib/close-cli-resources.js";
 import {
   chartOfAccounts,
-  transactionEmbeddings,
   transactions,
   vendorAliases,
   vendorRules,
@@ -88,6 +87,38 @@ const TENANT_SEED = [
     ],
   },
 ] as const;
+
+/**
+ * Upserts a deterministic embedding for a labeled seed transaction.
+ *
+ * @param db - Database client.
+ * @param tenantId - Tenant UUID.
+ * @param transactionId - Transaction UUID.
+ * @param vendor - Vendor string from seed fixture.
+ * @param memo - Optional memo from seed fixture.
+ * @param dimensions - Embedding vector size from env.
+ */
+async function upsertDeterministicSeedEmbedding(
+  db: ReturnType<typeof getDb>,
+  tenantId: string,
+  transactionId: string,
+  vendor: string,
+  memo: string | undefined,
+  dimensions: number,
+): Promise<void> {
+  const text = buildEmbeddingText(vendor, memo);
+  const embedding = buildDeterministicEmbedding(text, dimensions);
+  const vectorLiteral = `[${embedding.join(",")}]`;
+
+  await db.execute(sql`
+    INSERT INTO transaction_embeddings (tenant_id, transaction_id, embedding, embedding_model)
+    VALUES (${tenantId}, ${transactionId}, ${vectorLiteral}::vector, ${"deterministic-seed"})
+    ON CONFLICT (transaction_id)
+    DO UPDATE SET
+      embedding = EXCLUDED.embedding,
+      embedding_model = EXCLUDED.embedding_model
+  `);
+}
 
 /**
  * Seeds tenants, CoA, vendors, rules, labeled transactions, and embeddings.
@@ -217,21 +248,31 @@ async function main(): Promise<void> {
         .onConflictDoNothing()
         .returning({ id: transactions.id });
 
-      if (!insertedTxn) {
+      let transactionId = insertedTxn?.id;
+      if (!transactionId) {
+        const existingTxn = await db
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(eq(transactions.externalTransactionId, externalId))
+          .limit(1);
+        transactionId = existingTxn[0]?.id;
+      }
+
+      if (!transactionId) {
         continue;
       }
 
       if (useLiveEmbeddings) {
-        await embedAndStoreTransaction(db, env, tenantId, insertedTxn.id, txn.vendor, txn.memo);
+        await embedAndStoreTransaction(db, env, tenantId, transactionId, txn.vendor, txn.memo);
       } else {
-        const text = buildEmbeddingText(txn.vendor, txn.memo);
-        const embedding = buildDeterministicEmbedding(text, env.EMBEDDING_DIMENSIONS);
-        await db.insert(transactionEmbeddings).values({
+        await upsertDeterministicSeedEmbedding(
+          db,
           tenantId,
-          transactionId: insertedTxn.id,
-          embedding,
-          embeddingModel: "deterministic-seed",
-        });
+          transactionId,
+          txn.vendor,
+          txn.memo,
+          env.EMBEDDING_DIMENSIONS,
+        );
       }
     }
 

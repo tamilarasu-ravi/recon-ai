@@ -49,6 +49,8 @@ export function SettingsClient(): React.ReactElement {
   const [bootstrapSlugs, setBootstrapSlugs] = useState<string[]>(["tenant-a", "tenant-b"]);
   const [requireApiAuth, setRequireApiAuth] = useState(false);
   const [showIntegrations, setShowIntegrations] = useState(false);
+  const [showDevTools, setShowDevTools] = useState(false);
+  const [showApiKeyAdmin, setShowApiKeyAdmin] = useState(false);
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [webhookSecrets, setWebhookSecrets] = useState<WebhookSecretListItem[]>([]);
   const [newWebhookName, setNewWebhookName] = useState("card-processor");
@@ -72,11 +74,15 @@ export function SettingsClient(): React.ReactElement {
             erp_provider: string;
             require_api_auth: boolean;
             show_integrations?: boolean;
+            show_dev_tools?: boolean;
+            show_api_key_admin?: boolean;
             quickbooks_oauth_configured?: boolean;
           };
           setErpProvider(data.erp_provider);
           setRequireApiAuth(data.require_api_auth);
           setShowIntegrations(data.show_integrations ?? false);
+          setShowDevTools(data.show_dev_tools ?? false);
+          setShowApiKeyAdmin(data.show_api_key_admin ?? false);
           setQuickbooksConfigured(data.quickbooks_oauth_configured ?? false);
         }
       } catch {
@@ -107,7 +113,7 @@ export function SettingsClient(): React.ReactElement {
   }, [needsBootstrap]);
 
   const loadKeys = useCallback(async (): Promise<void> => {
-    if (!tenantId) {
+    if (!tenantId || !showApiKeyAdmin) {
       return;
     }
 
@@ -145,7 +151,7 @@ export function SettingsClient(): React.ReactElement {
     } finally {
       setListLoading(false);
     }
-  }, [tenantId, showIntegrations]);
+  }, [tenantId, showIntegrations, showApiKeyAdmin]);
 
   const loadErpConnections = useCallback(async (): Promise<void> => {
     if (!tenantId) {
@@ -182,14 +188,19 @@ export function SettingsClient(): React.ReactElement {
 
   useEffect(() => {
     if (!tenantLoading && tenantId) {
-      void loadKeys();
+      if (showApiKeyAdmin) {
+        void loadKeys();
+      } else {
+        setKeys([]);
+        setWebhookSecrets([]);
+      }
       if (showIntegrations) {
         void loadErpConnections();
       } else {
         setQbConnection(null);
       }
     }
-  }, [tenantLoading, tenantId, showIntegrations, loadKeys, loadErpConnections]);
+  }, [tenantLoading, tenantId, showIntegrations, showApiKeyAdmin, loadKeys, loadErpConnections]);
 
   useEffect(() => {
     if (!showIntegrations) {
@@ -341,7 +352,9 @@ export function SettingsClient(): React.ReactElement {
       subtitle={
         showIntegrations
           ? "API keys, browser session, and integration configuration."
-          : "Dev ingest, bulk import, and observability for the showcase demo."
+          : showDevTools || showApiKeyAdmin
+            ? "Developer tools and observability."
+            : "Quality and performance settings for your company."
       }
       loading={tenantLoading || listLoading}
       blocking={actionLoading}
@@ -353,8 +366,19 @@ export function SettingsClient(): React.ReactElement {
 
       {needsBootstrap ? (
         <p className="alert alert--info" style={{ marginBottom: "1rem" }}>
-          API auth is on and no key is saved yet. Generate your first key below (no existing key
-          required), then click <strong>Save for this browser</strong> if needed and reload.
+          API auth is on and no key is saved yet.{" "}
+          {showApiKeyAdmin ? (
+            <>
+              Generate your first key below (no existing key required), then click{" "}
+              <strong>Save for this browser</strong> if needed and reload.
+            </>
+          ) : (
+            <>
+              Paste a key from your administrator below and click{" "}
+              <strong>Save for this browser</strong>, or run{" "}
+              <code>pnpm auth:reset-keys</code> locally.
+            </>
+          )}
         </p>
       ) : null}
 
@@ -400,72 +424,77 @@ export function SettingsClient(): React.ReactElement {
         </section>
       ) : null}
 
-      <DevIngestPanel tenantId={tenantId} disabled={actionLoading} />
+      {showDevTools ? (
+        <>
+          <DevIngestPanel tenantId={tenantId} disabled={actionLoading} />
+          <BulkImportPanel tenantId={tenantId} disabled={actionLoading} />
+        </>
+      ) : null}
 
-      <BulkImportPanel tenantId={tenantId} disabled={actionLoading} />
-
-      <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
-        <h2 className="panel__title">Create tenant API key</h2>
-        {!tenantId ? (
-          <div className="form-field" style={{ marginBottom: "0.75rem" }}>
-            <label className="form-label" htmlFor="bootstrap-tenant">
-              Tenant
-            </label>
-            <select
-              id="bootstrap-tenant"
-              className="input"
-              value={bootstrapSlug}
-              onChange={(e) => setBootstrapSlug(e.target.value)}
+      {showApiKeyAdmin ? (
+        <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
+          <h2 className="panel__title">Create tenant API key</h2>
+          {!tenantId ? (
+            <div className="form-field" style={{ marginBottom: "0.75rem" }}>
+              <label className="form-label" htmlFor="bootstrap-tenant">
+                Tenant
+              </label>
+              <select
+                id="bootstrap-tenant"
+                className="input"
+                value={bootstrapSlug}
+                onChange={(e) => setBootstrapSlug(e.target.value)}
+              >
+                {bootstrapSlugs.map((slug) => (
+                  <option key={slug} value={slug}>
+                    {slug}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          <div className="form-row">
+            <div className="form-field">
+              <label className="form-label" htmlFor="key-name">
+                Label
+              </label>
+              <input
+                id="key-name"
+                className="input"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!canGenerateKey}
+              onClick={() => void createKey()}
             >
-              {bootstrapSlugs.map((slug) => (
-                <option key={slug} value={slug}>
-                  {slug}
-                </option>
-              ))}
-            </select>
+              Generate key
+            </button>
           </div>
-        ) : null}
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-label" htmlFor="key-name">
-              Label
-            </label>
-            <input
-              id="key-name"
-              className="input"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!canGenerateKey}
-            onClick={() => void createKey()}
-          >
-            Generate key
-          </button>
-        </div>
-        {!canGenerateKey ? (
-          <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
-            Waiting for tenant context…
-          </p>
-        ) : null}
-        {createdRawKey ? (
-          <p className="alert alert--warning" style={{ marginTop: "0.75rem" }}>
-            Copy now — shown once: <code>{createdRawKey}</code>
-          </p>
-        ) : null}
+          {!canGenerateKey ? (
+            <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
+              Waiting for tenant context…
+            </p>
+          ) : null}
+          {createdRawKey ? (
+            <p className="alert alert--warning" style={{ marginTop: "0.75rem" }}>
+              Copy now — shown once: <code>{createdRawKey}</code>
+            </p>
+          ) : null}
 
-        <ul className="api-list" style={{ marginTop: "1rem" }}>
-          {keys.map((key) => (
-            <li key={key.id}>
-              {key.name} · <code>{key.keyPrefix}…</code> ·{" "}
-              {key.isActive ? "active" : "inactive"}
-            </li>
-          ))}
-        </ul>
-      </section>
+          <ul className="api-list" style={{ marginTop: "1rem" }}>
+            {keys.map((key) => (
+              <li key={key.id}>
+                {key.name} · <code>{key.keyPrefix}…</code> ·{" "}
+                {key.isActive ? "active" : "inactive"}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {showIntegrations ? (
         <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>

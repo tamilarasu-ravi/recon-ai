@@ -16,6 +16,11 @@ const steps: Array<{ name: string; command: string; env?: Record<string, string>
     command: "pnpm eval:tagging",
     env: { LLM_ENABLE_LIVE_CALLS: "false" },
   },
+  {
+    name: "eval gate",
+    command: "pnpm eval:gate",
+    env: { LLM_ENABLE_LIVE_CALLS: "false" },
+  },
   { name: "sync eval-results.md", command: "tsx scripts/update-eval-results-doc.ts" },
   { name: "production build", command: "pnpm build" },
 ];
