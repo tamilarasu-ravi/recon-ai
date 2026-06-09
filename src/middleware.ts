@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
+import { isApiAuthRequired } from "@/lib/config/runtime";
 import { isSsoEnabled } from "@/lib/auth/sso-config";
 
 const isPublicRoute = createRouteMatcher([
@@ -22,7 +23,7 @@ const clerkProtectedMiddleware = clerkMiddleware(async (auth, req) => {
 });
 
 /**
- * Runs Clerk protection when SSO is configured; otherwise passes through.
+ * Runs Clerk protection when API auth is required and SSO is configured; otherwise passes through.
  *
  * @param request - Incoming Next.js request.
  * @param event - Middleware fetch event.
@@ -32,7 +33,7 @@ export default function middleware(
   request: NextRequest,
   event: NextFetchEvent,
 ): ReturnType<typeof clerkProtectedMiddleware> {
-  if (!isSsoEnabled()) {
+  if (!isApiAuthRequired() || !isSsoEnabled()) {
     return NextResponse.next();
   }
 

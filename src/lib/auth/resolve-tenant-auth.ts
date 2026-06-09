@@ -12,10 +12,12 @@ const API_KEY_ADMIN_ROLE = "admin" as const;
 /**
  * Returns true when callers must authenticate (API key and/or SSO session).
  *
+ * When REQUIRE_API_AUTH=false, the app runs in open demo mode even if Clerk env vars exist.
+ *
  * @returns Whether auth is mandatory.
  */
 export function isAuthEnforced(): boolean {
-  return isApiAuthRequired() || isSsoEnabled();
+  return isApiAuthRequired();
 }
 
 /**
