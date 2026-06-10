@@ -26,7 +26,7 @@ Agents return **structured decisions**; only the orchestrator mutates workflow s
 | **Controller / CFO** | Policy outcomes, autonomy rates, cost per run, eval drift |
 | **Integrator / agent** | Ingest txns, reprocess, MCP tools — same contract as UI |
 
-## What ships today (v0.1 platform core)
+## What ships today (Phase 1 — operator product)
 
 | Capability | Status |
 |------------|--------|
@@ -38,7 +38,7 @@ Agents return **structured decisions**; only the orchestrator mutates workflow s
 | MCP platform tools | **Beta** |
 | Eval harness (`pnpm eval:tagging`) | **Production-shaped** |
 | AP recommend-only + duplicate detection | **Stub** — graph + API, limited UI |
-| Auth / RBAC / SSO | **Not started** |
+| Auth / RBAC / SSO | **Partial** — API keys + optional Clerk; full RBAC → Phase 4 |
 | Real ERP OAuth + post | **Not started** |
 | Payment execution | **Out of product scope** (recommend-only until dual-control design) |
 
@@ -71,12 +71,12 @@ Feature inventory: [`docs/product-roadmap.md`](./docs/product-roadmap.md).
 | p95 ingest → decision (sync path) | < 5s demo; < 30s prod target |
 | Eval regression | 0 unintended decision flips per release |
 
-## Capstone origin
+## Origin
 
-This codebase began as an AI Engineering capstone (June 2026). Capstone timeline, submission checklist, and showcase artifacts live under [`docs/capstone/`](./docs/capstone/README.md). **Product direction is governed by this file and the roadmap**, not the academic deadline.
+This codebase began as an AI Engineering capstone and is now maintained as a product. Demo and eval artifacts: [`docs/capstone/`](./docs/capstone/README.md). **Direction is governed by this file and the roadmap.**
 
-## v2 — Agentic evidence (`develop` only)
+## v2 — Agentic evidence (`develop` branch)
 
-`main` is frozen for the Jun 14 showcase. Post-showcase / interview-track work adds **conditional retrieval, evidence planner, and verifier** behind `AGENTIC_EVIDENCE_ENABLED`.
+Post–Phase 1 work on `develop` adds **conditional retrieval, evidence planner, and verifier** behind `AGENTIC_EVIDENCE_ENABLED`. `main` holds the Phase 1 operator product baseline.
 
 **Implementation plan (source of truth):** [`planning/agentic-v2-implementation-plan.md`](./planning/agentic-v2-implementation-plan.md)

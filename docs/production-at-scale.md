@@ -556,8 +556,8 @@ Do **not** build before Jun 10. Mention in interview + `docs/architecture.md` as
 
 | Doc | Purpose |
 |-----|---------|
-| [What we are building](./what-we-are-building.md) | Business problem + beginner flow |
-| [Hero build spec §12](./superpowers/specs/2026-05-28-tagging-mini-product-design.md#12-production-ai-engineering-layer) | What we implement before Jun 10 |
-| [Hero build spec §12.9](./superpowers/specs/2026-05-28-tagging-mini-product-design.md#129-scale-ready-hooks-implement-now-not-later) | Scale-ready hooks in current build |
-| [README § Production next](../README.md#production-next-document-only) | Explicit out-of-scope for capstone |
+| [What we are building](./what-we-are-building.html) | Business problem + beginner flow |
+| [Hero build spec §12](./superpowers/specs/2026-05-28-tagging-mini-product-design.md#12-production-ai-engineering-layer) | Production AI layer in Phase 1 build |
+| [Hero build spec §12.9](./superpowers/specs/2026-05-28-tagging-mini-product-design.md#129-scale-ready-hooks-implement-now-not-later) | Scale-ready hooks shipped |
+| [README § Production next](../README.md#production-next) | Phase 2+ deferrals |
 | [tech-stack.md](./tech-stack.md) | Locked stack + pgvector deferral rationale |

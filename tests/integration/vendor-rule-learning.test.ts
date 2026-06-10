@@ -63,7 +63,7 @@ describe("vendor rule learning after override", { skip: !hasDatabase }, () => {
           processingStatus: "completed",
           taggingDecision: "QUEUE_REVIEW",
         })
-        .returning({ id: transactions.id });
+        .returning({ id: transactions.id, vendorId: transactions.vendorId });
 
       assert.ok(!txn.vendorId, "new vendor txn should not have vendorId before override");
 
