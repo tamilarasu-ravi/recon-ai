@@ -41,7 +41,7 @@ function runStep(label: string, command: string, env?: Record<string, string>): 
 }
 
 async function main(): Promise<void> {
-  console.log("ReconAI showcase prep (code-freeze gate)");
+  console.log("ReconAI showcase prep");
   const started = Date.now();
 
   for (const step of steps) {
