@@ -72,12 +72,11 @@ export function TransactionRunTrace({
   return (
     <>
       <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", margin: "0 0 0.75rem" }}>
-        run_id: <code>{audit.runId}</code> · agent {audit.agent}
-        {audit.policyVersion ? ` · policy ${audit.policyVersion}` : null}
+        {audit.policyVersion ? `Policy version ${audit.policyVersion}` : null}
         {audit.decision ? (
           <>
-            {" "}
-            · <DecisionBadge decision={audit.decision} />
+            {audit.policyVersion ? " · " : null}
+            <DecisionBadge decision={audit.decision} />
           </>
         ) : null}
         {audit.confidence ? ` · confidence ${audit.confidence}` : null}
@@ -85,10 +84,13 @@ export function TransactionRunTrace({
 
       {observability.llm_skipped ? (
         <p className="alert alert--info" style={{ marginBottom: "0.75rem" }}>
-          <strong>LLM skipped:</strong> {observability.llm_skipped_reason ?? "rule-first match"}
+          <strong>Used vendor rule:</strong>{" "}
+          {observability.llm_skipped_reason ?? "matched a saved vendor rule"}
         </p>
       ) : observability.llm_skipped === false ? (
-        <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem" }}>LLM used for tagging suggestion.</p>
+        <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem" }}>
+          AI suggestion used for account coding.
+        </p>
       ) : null}
 
       {typeof observability.cost_usd === "number" ||
@@ -130,12 +132,12 @@ export function TransactionRunTrace({
       ) : null}
       {observability.receipt_blocked ? (
         <p className="alert alert--error" style={{ marginTop: "0.5rem" }}>
-          Receipt blocked AUTO_TAG.
+          Receipt required before this expense can be auto-coded.
         </p>
       ) : null}
       {observability.reason ? (
         <p style={{ fontSize: "0.875rem", margin: "0.5rem 0" }}>
-          Gate reason: <strong>{observability.reason}</strong>
+          Reason: <strong>{observability.reason}</strong>
         </p>
       ) : null}
 
@@ -145,7 +147,7 @@ export function TransactionRunTrace({
 
       {runEvents.length > 0 ? (
         <details className="details-scroll" style={{ marginTop: "1rem" }}>
-          <summary className="details-summary">Domain events ({runEvents.length})</summary>
+          <summary className="details-summary">Activity ({runEvents.length})</summary>
           <ul className="api-list" style={{ marginTop: "0.5rem" }}>
             {runEvents.map((event, index) => (
               <li key={`${event.eventType}-${index}`}>
@@ -161,7 +163,7 @@ export function TransactionRunTrace({
 
       {Array.isArray(observability.steps) && observability.steps.length > 0 ? (
         <details className="details-scroll" style={{ marginTop: "1rem" }}>
-          <summary className="details-summary">Agent step trace ({observability.steps.length})</summary>
+          <summary className="details-summary">Technical trace ({observability.steps.length})</summary>
           <pre className="code-block">{JSON.stringify(observability.steps, null, 2)}</pre>
         </details>
       ) : null}

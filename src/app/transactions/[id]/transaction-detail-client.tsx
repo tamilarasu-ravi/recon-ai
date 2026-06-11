@@ -49,6 +49,42 @@ interface TransactionDetailResponse {
   }>;
   events: Array<{ eventType: string; runId: string; payload: unknown; createdAt: string }>;
   pending_auto_tag: { run_id: string; payload: unknown } | null;
+  coa_options: Array<{ glCode: string; glName: string }>;
+}
+
+/**
+ * Formats a chart-of-accounts row for select options and success messages.
+ *
+ * @param entry - Tenant CoA code and display name.
+ * @returns Human-readable label (e.g. "6100 — Software & Cloud").
+ */
+function formatCoaOptionLabel(entry: { glCode: string; glName: string }): string {
+  return `${entry.glCode} — ${entry.glName}`;
+}
+
+/**
+ * Picks the default override GL from suggestion, posted GL, or first tenant CoA row.
+ *
+ * @param detail - Loaded transaction detail payload.
+ * @returns GL code string or empty when CoA is unavailable.
+ */
+function resolveDefaultOverrideGlCode(detail: TransactionDetailResponse): string {
+  const options = detail.coa_options;
+  if (options.length === 0) {
+    return "";
+  }
+
+  const suggested = detail.transaction.suggested_gl?.glCode;
+  if (suggested && options.some((row) => row.glCode === suggested)) {
+    return suggested;
+  }
+
+  const posted = detail.transaction.posted_gl?.glCode;
+  if (posted && options.some((row) => row.glCode === posted)) {
+    return posted;
+  }
+
+  return options[0]!.glCode;
 }
 
 /**
@@ -68,7 +104,7 @@ export function TransactionDetailClient(): React.ReactElement {
   const [detail, setDetail] = useState<TransactionDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [glCode, setGlCode] = useState("6200");
+  const [glCode, setGlCode] = useState("");
   const [overrideMessage, setOverrideMessage] = useState<string | null>(null);
   const [receiptText, setReceiptText] = useState("Receipt uploaded via UI");
   const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
@@ -88,7 +124,11 @@ export function TransactionDetailClient(): React.ReactElement {
         const body = (await response.json()) as { error?: string };
         throw new Error(body.error ?? `HTTP ${response.status}`);
       }
-      setDetail((await response.json()) as TransactionDetailResponse);
+      const payload = (await response.json()) as TransactionDetailResponse;
+      setDetail({
+        ...payload,
+        coa_options: payload.coa_options ?? [],
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load transaction");
       setDetail(null);
@@ -100,6 +140,13 @@ export function TransactionDetailClient(): React.ReactElement {
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    if (!detail) {
+      return;
+    }
+    setGlCode(resolveDefaultOverrideGlCode(detail));
+  }, [detail]);
 
   const eventRuns = useMemo(
     () => (detail ? groupTransactionEventsByRun(detail.events) : []),
@@ -159,8 +206,8 @@ export function TransactionDetailClient(): React.ReactElement {
       }
       setApproveMessage(
         approved
-          ? `AUTO_TAG approved — decision: ${body.decision ?? "unknown"}`
-          : `AUTO_TAG rejected — queued for review`,
+          ? `Auto-coding approved — status: ${body.decision ?? "unknown"}`
+          : "Auto-coding rejected — sent back to review queue",
       );
       invalidateReviewQueueCache(tenantId);
       await loadDetail();
@@ -294,10 +341,13 @@ export function TransactionDetailClient(): React.ReactElement {
       if (!response.ok) {
         throw new Error(body.error ?? `HTTP ${response.status}`);
       }
+      const accountLabel =
+        detail?.coa_options.find((row) => row.glCode === glCode) ?? null;
+      const accountText = accountLabel ? formatCoaOptionLabel(accountLabel) : glCode;
       setOverrideMessage(
         body.vendorRuleCreated
-          ? `Override applied — new vendor rule for GL ${glCode}.`
-          : `Override applied — GL ${glCode} (rule already existed).`,
+          ? `Override applied — new vendor rule for ${accountText}.`
+          : `Override applied — ${accountText} (rule already existed).`,
       );
       invalidateReviewQueueCache(tenantId);
       await loadDetail();
@@ -368,7 +418,7 @@ export function TransactionDetailClient(): React.ReactElement {
               </div>
               {detail.transaction.suggested_gl ? (
                 <div className="stat">
-                  <span className="stat__label">Suggested GL</span>
+                  <span className="stat__label">Suggested account</span>
                   <span className="stat__value">
                     {detail.transaction.suggested_gl.glCode} — {detail.transaction.suggested_gl.glName}
                   </span>
@@ -376,7 +426,7 @@ export function TransactionDetailClient(): React.ReactElement {
               ) : null}
               {detail.transaction.posted_gl ? (
                 <div className="stat">
-                  <span className="stat__label">Posted GL</span>
+                  <span className="stat__label">Posted account</span>
                   <span className="stat__value">
                     {detail.transaction.posted_gl.glCode} — {detail.transaction.posted_gl.glName}
                   </span>
@@ -403,7 +453,7 @@ export function TransactionDetailClient(): React.ReactElement {
               </p>
             ) : (
               <p className="panel__desc">
-                AUTO_TAG transactions post to the sandbox ERP adapter after orchestration completes.
+                Auto-coded expenses can be posted to your connected ERP after processing completes.
               </p>
             )}
             {detail.transaction.taggingDecision === "AUTO_TAG" && !detail.transaction.erpExternalId ? (
@@ -413,17 +463,17 @@ export function TransactionDetailClient(): React.ReactElement {
                 disabled={loading || actionLoading}
                 onClick={() => void submitErpPost()}
               >
-                Post to ERP (mock)
+                Post to ERP
               </button>
             ) : null}
           </section>
 
           {eventRuns.length > 0 ? (
             <section className="panel detail-grid__full" style={{ marginBottom: "1rem" }}>
-              <h2 className="panel__title">Orchestrator runs</h2>
+              <h2 className="panel__title">Processing runs</h2>
               <p className="panel__desc">
-                Each row is one LangGraph invocation (reprocess creates a new run). Select a run to
-                view graph steps and audit trace below.
+                Each row is one pass through policy and tagging. Select a run to see step-by-step
+                detail below.
               </p>
               <ul className="event-run-list">
                 {eventRuns.map((run) => {
@@ -465,8 +515,8 @@ export function TransactionDetailClient(): React.ReactElement {
                 auditSectionId="run-trace"
                 title={
                   detail.transaction.processingStatus === "processing"
-                    ? "Live pipeline trace"
-                    : "Pipeline trace"
+                    ? "Live processing steps"
+                    : "Processing steps"
                 }
               />
             </section>
@@ -484,14 +534,14 @@ export function TransactionDetailClient(): React.ReactElement {
                 }}
               >
                 <h2 className="panel__title" style={{ margin: 0 }}>
-                  Run trace
+                  Step-by-step trace
                 </h2>
                 <Link
                   href="/orchestrator"
                   className="btn btn--secondary"
                   style={{ padding: "0.35rem 0.65rem", fontSize: "0.8125rem" }}
                 >
-                  Orchestrator topology
+                  Workflow diagram
                 </Link>
               </div>
               {selectedRunId ? (
@@ -502,15 +552,11 @@ export function TransactionDetailClient(): React.ReactElement {
             </section>
 
             <section className="panel panel--hitl">
-              <h2 className="panel__title">AUTO_TAG approval (HITL)</h2>
+              <h2 className="panel__title">Approve auto-coding</h2>
               {detail.pending_auto_tag ? (
                 <>
                   <p className="panel__desc">
-                    Graph paused at <code>awaitAutoTagApproval</code>. Approve to post, or reject to
-                    queue for review.
-                  </p>
-                  <p style={{ fontSize: "0.8125rem", marginBottom: "1rem" }}>
-                    run_id: <code>{detail.pending_auto_tag.run_id}</code>
+                    This expense is ready to auto-code but needs your approval before it posts.
                   </p>
                   <div className="btn-group">
                     <button
@@ -519,7 +565,7 @@ export function TransactionDetailClient(): React.ReactElement {
                       disabled={loading || actionLoading}
                       onClick={() => void submitAutoTagApproval(true)}
                     >
-                      Approve AUTO_TAG
+                      Approve
                     </button>
                     <button
                       type="button"
@@ -527,7 +573,7 @@ export function TransactionDetailClient(): React.ReactElement {
                       disabled={loading || actionLoading}
                       onClick={() => void submitAutoTagApproval(false)}
                     >
-                      Reject
+                      Send to review
                     </button>
                   </div>
                   {approveMessage ? (
@@ -537,15 +583,15 @@ export function TransactionDetailClient(): React.ReactElement {
                   ) : null}
                 </>
               ) : (
-                <p className="panel__desc">No pending AUTO_TAG approval for this transaction.</p>
+                <p className="panel__desc">No approval is pending for this expense.</p>
               )}
             </section>
 
             <section className="panel panel--warning">
-              <h2 className="panel__title">Receipt (policy gate)</h2>
+              <h2 className="panel__title">Receipt</h2>
               <p className="panel__desc">
-                Upload mock receipt text — reprocess runs automatically. Use <strong>tenant-a</strong>{" "}
-                for the AWS vendor-rule AUTO_TAG path.
+                Some expenses require a receipt before they can be auto-coded. Upload receipt text
+                and we will reprocess automatically.
               </p>
               {receiptCleared ? (
                 <p className="alert alert--success" style={{ marginBottom: "1rem" }}>
@@ -588,21 +634,39 @@ export function TransactionDetailClient(): React.ReactElement {
             <section className="panel">
               <h2 className="panel__title">Accountant override</h2>
               <p className="panel__desc">
-                Creates or updates a per-tenant vendor rule — similar transactions auto-tag on replay.
+                Choose the correct account for this vendor. Future expenses from the same vendor
+                can auto-code using this choice.
               </p>
               <form onSubmit={(e) => void submitOverride(e)} className="form-row">
                 <div className="form-field">
-                  <label className="form-label" htmlFor="gl-code">
-                    GL code
+                  <label className="form-label" htmlFor="override-gl-account">
+                    Account (chart of accounts)
                   </label>
-                  <input
-                    id="gl-code"
-                    className="input"
-                    value={glCode}
-                    onChange={(e) => setGlCode(e.target.value)}
-                  />
+                  {detail.coa_options.length > 0 ? (
+                    <select
+                      id="override-gl-account"
+                      className="select"
+                      value={glCode}
+                      onChange={(event) => setGlCode(event.target.value)}
+                      required
+                    >
+                      {detail.coa_options.map((option) => (
+                        <option key={option.glCode} value={option.glCode}>
+                          {formatCoaOptionLabel(option)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="alert alert--error">
+                      No accounts are configured for this company. Contact your administrator.
+                    </p>
+                  )}
                 </div>
-                <button type="submit" className="btn btn--primary" disabled={loading || actionLoading}>
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={loading || actionLoading || !glCode}
+                >
                   Apply override
                 </button>
               </form>

@@ -6,8 +6,7 @@ dist/
 .venv-pdf/
 .DS_Store
 
-# Planning / SME docs — local only (not committed)
-docs/*
+# Cursor rules — local only
 .cursor/*
 !.cursor/mcp.json.example
 
@@ -25,3 +24,35 @@ data/*
 !data/kaggle-category-to-gl.json
 !data/mock_invoices/
 !data/mock_invoices/**
+
+# Docs — ignore by default; whitelist product docs linked from README
+docs/*
+!docs/architecture.md
+!docs/product-roadmap.md
+!docs/production-roadmap.md
+!docs/tech-stack.md
+!docs/eval-results.md
+!docs/demo-script.md
+!docs/mcp-setup.md
+!docs/langfuse-setup.md
+!docs/production-at-scale.md
+!docs/vercel-deploy.md
+!docs/webhook-ingest.md
+!docs/security.md
+!docs/async-processing.md
+!docs/quickbooks-erp.md
+!docs/sso-rbac.md
+!docs/tenant-rls.md
+!docs/multi-region-dr.md
+!docs/capstone-requirements-and-evals.md
+!docs/PITCH-cfo-operations-platform.md
+!docs/what-we-are-building.html
+!docs/capstone/
+!docs/capstone/**
+!docs/guides/
+!docs/guides/**
+!docs/superpowers/
+!docs/superpowers/**
+
+# Local-only doc exports (PDF brief, etc.)
+docs/recon-ai-docs/

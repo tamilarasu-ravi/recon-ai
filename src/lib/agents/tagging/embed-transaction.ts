@@ -13,9 +13,18 @@ import { transactionEmbeddings } from "@/lib/db/schema";
  * @returns Normalized pseudo-embedding vector.
  */
 export function buildDeterministicEmbedding(text: string, dimensions: number): number[] {
+  const normalized = text.toLowerCase().trim();
+  const segments = normalized.split(" | ").filter(Boolean);
+  const vendorSegment = segments[0] ?? normalized;
+  // Weight vendor tokens so recall@5 prefers same-vendor neighbors (eval + seed use same fn).
+  const weightedText =
+    segments.length > 1
+      ? [vendorSegment, vendorSegment, vendorSegment, ...segments.slice(1)].join(" | ")
+      : [vendorSegment, vendorSegment, vendorSegment].join(" | ");
+
   const vector = new Array<number>(dimensions).fill(0);
-  for (let index = 0; index < text.length; index += 1) {
-    vector[index % dimensions] += text.charCodeAt(index) / 255;
+  for (let index = 0; index < weightedText.length; index += 1) {
+    vector[index % dimensions] += weightedText.charCodeAt(index) / 255;
   }
   const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0)) || 1;
   return vector.map((value) => value / magnitude);
@@ -30,7 +39,9 @@ export function buildDeterministicEmbedding(text: string, dimensions: number): n
  * @returns Concatenated text for embedding.
  */
 export function buildEmbeddingText(vendorRaw: string, memo?: string, mcc?: string): string {
-  return [vendorRaw, memo ?? "", mcc ?? ""].filter(Boolean).join(" | ");
+  return [vendorRaw.toLowerCase().trim(), memo?.toLowerCase().trim() ?? "", mcc ?? ""]
+    .filter(Boolean)
+    .join(" | ");
 }
 
 /**

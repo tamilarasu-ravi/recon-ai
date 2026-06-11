@@ -9,7 +9,6 @@ export interface ObservabilityRuntimeStatus {
   langfuse_host: string | null;
   slo_decision_latency_p95_ms: number;
   slo_auto_tag_precision_min: number;
-  otel_note: string;
 }
 
 /**
@@ -25,7 +24,5 @@ export function getObservabilityRuntimeStatus(): ObservabilityRuntimeStatus {
     langfuse_host: host,
     slo_decision_latency_p95_ms: SLO_DECISION_LATENCY_P95_MS,
     slo_auto_tag_precision_min: SLO_AUTO_TAG_PRECISION_MIN,
-    otel_note:
-      "Audit_log + pipeline trace today; Langfuse v3 export when keys set. OTel SDK upgrade is post-capstone.",
   };
 }

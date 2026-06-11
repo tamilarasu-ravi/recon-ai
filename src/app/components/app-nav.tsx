@@ -48,17 +48,17 @@ export function AppNav(): React.ReactElement {
 
         <div className="app-header__actions">
           <label className="tenant-select">
-            <span className="tenant-select__label">Tenant</span>
+            <span className="tenant-select__label">Company</span>
             <select
               className="select"
               value={tenantId ?? ""}
               disabled={loading || tenants.length === 0}
               onChange={(e) => setTenantId(e.target.value)}
-              aria-label="Select tenant"
+              aria-label="Select company"
             >
               {tenants.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.slug}
+                  {t.name}
                 </option>
               ))}
             </select>

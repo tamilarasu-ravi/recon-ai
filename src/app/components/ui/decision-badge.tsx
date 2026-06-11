@@ -1,4 +1,4 @@
-import { decisionBadgeClass } from "@/lib/ui/decision-styles";
+import { decisionBadgeClass, formatDecisionLabel } from "@/lib/ui/decision-styles";
 
 interface DecisionBadgeProps {
   decision: string | null | undefined;
@@ -15,5 +15,5 @@ export function DecisionBadge({ decision }: DecisionBadgeProps): React.ReactElem
     return null;
   }
 
-  return <span className={decisionBadgeClass(decision)}>{decision.replace("_", " ")}</span>;
+  return <span className={decisionBadgeClass(decision)}>{formatDecisionLabel(decision)}</span>;
 }

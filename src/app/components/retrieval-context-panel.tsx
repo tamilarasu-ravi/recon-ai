@@ -10,7 +10,7 @@ interface RetrievalContextPanelProps {
 }
 
 /**
- * Shows top-k labeled neighbors used as RAG context for the selected tagging run.
+ * Shows similar labeled expenses used as context for the tagging decision.
  *
  * @param props - Parsed retrieval audit and tenant for neighbor links.
  * @returns Panel explaining similarity search results.
@@ -22,10 +22,10 @@ export function RetrievalContextPanel({
   if (!retrieval) {
     return (
       <section className="panel panel--muted detail-grid__full" id="rag-context">
-        <h2 className="panel__title">Label memory (RAG)</h2>
+        <h2 className="panel__title">Similar past expenses</h2>
         <p className="panel__desc">
-          No retrieval step in this run&apos;s audit — older runs may only store neighbor counts.
-          Reprocess to refresh with full neighbor detail.
+          No similar transactions were found for this processing run. Reprocess to refresh the
+          comparison set.
         </p>
       </section>
     );
@@ -33,38 +33,39 @@ export function RetrievalContextPanel({
 
   return (
     <section className="panel panel--muted detail-grid__full" id="rag-context">
-      <h2 className="panel__title">Label memory (RAG)</h2>
+      <h2 className="panel__title">Similar past expenses</h2>
       <p className="panel__desc">
-        Similar labeled transactions retrieved via pgvector (cosine). These neighbors are injected
-        into the tagging LLM prompt and feed the confidence scorer.
+        Labeled history that informed the suggested account and confidence score for this expense.
       </p>
 
       <div className="stat-grid" style={{ marginBottom: "1rem" }}>
         <div className="stat">
-          <span className="stat__label">Top-1 similarity</span>
+          <span className="stat__label">Best match score</span>
           <span className="stat__value">{retrieval.top1Similarity.toFixed(3)}</span>
         </div>
         <div className="stat">
-          <span className="stat__label">GL agreement</span>
+          <span className="stat__label">Account agreement</span>
           <span className="stat__value">
             {retrieval.supportCount}/{retrieval.neighborCount} (
             {(retrieval.agreeFraction * 100).toFixed(0)}%)
           </span>
         </div>
         <div className="stat">
-          <span className="stat__label">Neighbors</span>
+          <span className="stat__label">Matches shown</span>
           <span className="stat__value">{retrieval.neighborCount}</span>
         </div>
       </div>
 
       {retrieval.labeledCorpusHint ? (
         <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", marginBottom: "0.75rem" }}>
-          {retrieval.labeledCorpusHint}
+          {retrieval.labeledCorpusHint.replace("labeled transactions in tenant corpus", "labeled expenses on file")}
         </p>
       ) : null}
 
       {retrieval.neighbors.length === 0 ? (
-        <p className="alert alert--error">No labeled neighbors found — cold start or weak corpus.</p>
+        <p className="alert alert--error">
+          No similar labeled expenses found — this may be a new vendor or category.
+        </p>
       ) : (
         <ul className="retrieval-neighbor-list">
           {retrieval.neighbors.map((neighbor, index) => (

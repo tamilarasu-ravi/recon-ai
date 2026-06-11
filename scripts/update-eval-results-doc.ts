@@ -24,7 +24,9 @@ interface EvalSummary {
   auto_tag_precision: number;
   review_rate: number;
   refusal_rate: number;
-  retrieval_proxy_rate?: number;
+  retrieval_recall_at_5?: number;
+  retrieval_recall_eligible_count?: number;
+  retrieval_recall_hit_count?: number;
   llm_calls_saved_by_rules: number;
   total_cost_usd?: number;
   total_tokens?: number;
@@ -45,9 +47,11 @@ function buildSummaryBlock(summary: EvalSummary): string {
   const reviewPct = (summary.review_rate * 100).toFixed(1);
   const refusePct = (summary.refusal_rate * 100).toFixed(1);
   const retrievalPct =
-    summary.retrieval_proxy_rate !== undefined
-      ? (summary.retrieval_proxy_rate * 100).toFixed(1)
+    summary.retrieval_recall_at_5 !== undefined
+      ? (summary.retrieval_recall_at_5 * 100).toFixed(1)
       : "—";
+  const retrievalEligible = summary.retrieval_recall_eligible_count ?? "—";
+  const retrievalHits = summary.retrieval_recall_hit_count ?? "—";
   const passCount = Math.round(summary.pass_rate * summary.case_count);
   const mode = summary.llm_enable_live_calls ? "live LLM" : "deterministic fixtures";
   const costLine =
@@ -66,7 +70,7 @@ function buildSummaryBlock(summary: EvalSummary): string {
     `| Auto-tag precision | **${autoPct}%** | ≥ 95% |`,
     `| Review rate | ${reviewPct}% | — |`,
     `| Refusal rate | ${refusePct}% | — |`,
-    `| Retrieval proxy (non-REFUSE) | ${retrievalPct}% | — |`,
+    `| Retrieval recall@5 | **${retrievalPct}%** (${retrievalHits}/${retrievalEligible} eligible) | ≥ 80% |`,
     `| LLM calls saved by rules (proxy) | ${summary.llm_calls_saved_by_rules} | — |`,
     "",
     costLine,

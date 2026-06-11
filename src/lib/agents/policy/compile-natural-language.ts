@@ -27,6 +27,7 @@ export interface CompilePolicyResult {
     ruleId: string;
     ruleType: PolicyRuleType;
     ruleConfig: Record<string, unknown>;
+    replaced: boolean;
   };
 }
 
@@ -113,9 +114,10 @@ export async function compileAndOptionalPersistPolicy(
   return {
     ...compileResult,
     persisted: {
-      ruleId: created.id,
-      ruleType: created.ruleType,
-      ruleConfig: created.ruleConfig,
+      ruleId: created.rule.id,
+      ruleType: compileResult.compiled.rule_type,
+      ruleConfig: created.rule.ruleConfig,
+      replaced: created.replaced,
     },
   };
 }

@@ -48,6 +48,9 @@ export function SettingsClient(): React.ReactElement {
   const [bootstrapSlug, setBootstrapSlug] = useState("tenant-a");
   const [bootstrapSlugs, setBootstrapSlugs] = useState<string[]>(["tenant-a", "tenant-b"]);
   const [requireApiAuth, setRequireApiAuth] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
+  const [showDevTools, setShowDevTools] = useState(false);
+  const [showApiKeyAdmin, setShowApiKeyAdmin] = useState(false);
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [webhookSecrets, setWebhookSecrets] = useState<WebhookSecretListItem[]>([]);
   const [newWebhookName, setNewWebhookName] = useState("card-processor");
@@ -70,10 +73,16 @@ export function SettingsClient(): React.ReactElement {
           const data = (await response.json()) as {
             erp_provider: string;
             require_api_auth: boolean;
+            show_integrations?: boolean;
+            show_dev_tools?: boolean;
+            show_api_key_admin?: boolean;
             quickbooks_oauth_configured?: boolean;
           };
           setErpProvider(data.erp_provider);
           setRequireApiAuth(data.require_api_auth);
+          setShowIntegrations(data.show_integrations ?? false);
+          setShowDevTools(data.show_dev_tools ?? false);
+          setShowApiKeyAdmin(data.show_api_key_admin ?? false);
           setQuickbooksConfigured(data.quickbooks_oauth_configured ?? false);
         }
       } catch {
@@ -104,7 +113,7 @@ export function SettingsClient(): React.ReactElement {
   }, [needsBootstrap]);
 
   const loadKeys = useCallback(async (): Promise<void> => {
-    if (!tenantId) {
+    if (!tenantId || !showApiKeyAdmin) {
       return;
     }
 
@@ -112,10 +121,7 @@ export function SettingsClient(): React.ReactElement {
     setError(null);
 
     try {
-      const [keysResponse, webhookResponse] = await Promise.all([
-        apiFetch(`/api/api-keys?tenant_id=${encodeURIComponent(tenantId)}`),
-        apiFetch(`/api/webhook-secrets?tenant_id=${encodeURIComponent(tenantId)}`),
-      ]);
+      const keysResponse = await apiFetch(`/api/api-keys?tenant_id=${encodeURIComponent(tenantId)}`);
 
       if (!keysResponse.ok) {
         const body = (await keysResponse.json()) as { error?: string };
@@ -125,9 +131,16 @@ export function SettingsClient(): React.ReactElement {
       const keysData = (await keysResponse.json()) as { keys: ApiKeyListItem[] };
       setKeys(keysData.keys);
 
-      if (webhookResponse.ok) {
-        const webhookData = (await webhookResponse.json()) as { secrets: WebhookSecretListItem[] };
-        setWebhookSecrets(webhookData.secrets);
+      if (showIntegrations) {
+        const webhookResponse = await apiFetch(
+          `/api/webhook-secrets?tenant_id=${encodeURIComponent(tenantId)}`,
+        );
+        if (webhookResponse.ok) {
+          const webhookData = (await webhookResponse.json()) as { secrets: WebhookSecretListItem[] };
+          setWebhookSecrets(webhookData.secrets);
+        } else {
+          setWebhookSecrets([]);
+        }
       } else {
         setWebhookSecrets([]);
       }
@@ -138,7 +151,7 @@ export function SettingsClient(): React.ReactElement {
     } finally {
       setListLoading(false);
     }
-  }, [tenantId]);
+  }, [tenantId, showIntegrations, showApiKeyAdmin]);
 
   const loadErpConnections = useCallback(async (): Promise<void> => {
     if (!tenantId) {
@@ -175,12 +188,25 @@ export function SettingsClient(): React.ReactElement {
 
   useEffect(() => {
     if (!tenantLoading && tenantId) {
-      void loadKeys();
-      void loadErpConnections();
+      if (showApiKeyAdmin) {
+        void loadKeys();
+      } else {
+        setKeys([]);
+        setWebhookSecrets([]);
+      }
+      if (showIntegrations) {
+        void loadErpConnections();
+      } else {
+        setQbConnection(null);
+      }
     }
-  }, [tenantLoading, tenantId, loadKeys, loadErpConnections]);
+  }, [tenantLoading, tenantId, showIntegrations, showApiKeyAdmin, loadKeys, loadErpConnections]);
 
   useEffect(() => {
+    if (!showIntegrations) {
+      return;
+    }
+
     const qbStatus = searchParams.get("qb");
     const qbError = searchParams.get("qb_error");
     if (qbStatus === "connected") {
@@ -189,7 +215,7 @@ export function SettingsClient(): React.ReactElement {
     } else if (qbError) {
       setError(`QuickBooks connect failed: ${decodeURIComponent(qbError)}`);
     }
-  }, [searchParams, loadErpConnections]);
+  }, [searchParams, loadErpConnections, showIntegrations]);
 
   /**
    * Starts QuickBooks OAuth using an authenticated fetch (plain links omit the API key).
@@ -323,7 +349,13 @@ export function SettingsClient(): React.ReactElement {
   return (
     <PageLayout
       title="Settings"
-      subtitle="API keys, browser session, and integration configuration."
+      subtitle={
+        showIntegrations
+          ? "API keys, browser session, and integration configuration."
+          : showDevTools || showApiKeyAdmin
+            ? "Developer tools and observability."
+            : "Quality and performance settings for your company."
+      }
       loading={tenantLoading || listLoading}
       blocking={actionLoading}
       blockingLabel="Working…"
@@ -334,8 +366,19 @@ export function SettingsClient(): React.ReactElement {
 
       {needsBootstrap ? (
         <p className="alert alert--info" style={{ marginBottom: "1rem" }}>
-          API auth is on and no key is saved yet. Generate your first key below (no existing key
-          required), then click <strong>Save for this browser</strong> if needed and reload.
+          API auth is on and no key is saved yet.{" "}
+          {showApiKeyAdmin ? (
+            <>
+              Generate your first key below (no existing key required), then click{" "}
+              <strong>Save for this browser</strong> if needed and reload.
+            </>
+          ) : (
+            <>
+              Paste a key from your administrator below and click{" "}
+              <strong>Save for this browser</strong>, or run{" "}
+              <code>pnpm auth:reset-keys</code> locally.
+            </>
+          )}
         </p>
       ) : null}
 
@@ -381,165 +424,174 @@ export function SettingsClient(): React.ReactElement {
         </section>
       ) : null}
 
-      <DevIngestPanel tenantId={tenantId} disabled={actionLoading} />
+      {showDevTools ? (
+        <>
+          <DevIngestPanel tenantId={tenantId} disabled={actionLoading} />
+          <BulkImportPanel tenantId={tenantId} disabled={actionLoading} />
+        </>
+      ) : null}
 
-      <BulkImportPanel tenantId={tenantId} disabled={actionLoading} />
-
-      <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
-        <h2 className="panel__title">Create tenant API key</h2>
-        {!tenantId ? (
-          <div className="form-field" style={{ marginBottom: "0.75rem" }}>
-            <label className="form-label" htmlFor="bootstrap-tenant">
-              Tenant
-            </label>
-            <select
-              id="bootstrap-tenant"
-              className="input"
-              value={bootstrapSlug}
-              onChange={(e) => setBootstrapSlug(e.target.value)}
-            >
-              {bootstrapSlugs.map((slug) => (
-                <option key={slug} value={slug}>
-                  {slug}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-label" htmlFor="key-name">
-              Label
-            </label>
-            <input
-              id="key-name"
-              className="input"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!canGenerateKey}
-            onClick={() => void createKey()}
-          >
-            Generate key
-          </button>
-        </div>
-        {!canGenerateKey ? (
-          <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
-            Waiting for tenant context…
-          </p>
-        ) : null}
-        {createdRawKey ? (
-          <p className="alert alert--warning" style={{ marginTop: "0.75rem" }}>
-            Copy now — shown once: <code>{createdRawKey}</code>
-          </p>
-        ) : null}
-
-        <ul className="api-list" style={{ marginTop: "1rem" }}>
-          {keys.map((key) => (
-            <li key={key.id}>
-              {key.name} · <code>{key.keyPrefix}…</code> ·{" "}
-              {key.isActive ? "active" : "inactive"}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
-        <h2 className="panel__title">Webhook signing secrets</h2>
-        <p className="panel__desc">
-          HMAC-signed ingest at{" "}
-          <code>POST /api/webhooks/transactions?tenant_slug=…</code>. Requires a saved API key when
-          auth is enabled.
-        </p>
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-label" htmlFor="webhook-name">
-              Label
-            </label>
-            <input
-              id="webhook-name"
-              className="input"
-              value={newWebhookName}
-              onChange={(e) => setNewWebhookName(e.target.value)}
-              disabled={!tenantId}
-            />
-          </div>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!tenantId || actionLoading}
-            onClick={() => void createWebhookSecret()}
-          >
-            Generate webhook secret
-          </button>
-        </div>
-        {createdRawWebhookSecret ? (
-          <p className="alert alert--warning" style={{ marginTop: "0.75rem" }}>
-            Copy now — shown once: <code>{createdRawWebhookSecret}</code>
-          </p>
-        ) : null}
-        <ul className="api-list" style={{ marginTop: "1rem" }}>
-          {webhookSecrets.map((secret) => (
-            <li key={secret.id}>
-              {secret.name} · <code>{secret.secretPrefix}…</code> ·{" "}
-              {secret.isActive ? "active" : "inactive"}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="panel">
-        <h2 className="panel__title">ERP integration</h2>
-        <p className="panel__desc">
-          AUTO_TAG transactions post to the configured adapter. Connect QuickBooks sandbox OAuth
-          for tenant-scoped posting (set <code>ERP_PROVIDER=quickbooks_sandbox</code>).
-        </p>
-        <p style={{ fontSize: "0.875rem" }}>
-          Provider: <strong>{erpProvider}</strong>
-        </p>
-        {qbConnection ? (
-          <p className="alert alert--success" style={{ marginTop: "0.75rem" }}>
-            QuickBooks connected
-            {qbConnection.realmId ? (
-              <>
-                {" "}
-                · realm <code>{qbConnection.realmId}</code>
-              </>
-            ) : null}{" "}
-            · since {new Date(qbConnection.connectedAt).toLocaleString()}
-          </p>
-        ) : (
-          <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
-            QuickBooks not connected for this tenant.
-          </p>
-        )}
-        {!quickbooksConfigured ? (
-          <p className="alert alert--info" style={{ marginTop: "0.75rem" }}>
-            Add <code>QUICKBOOKS_CLIENT_ID</code>, <code>QUICKBOOKS_CLIENT_SECRET</code>, and{" "}
-            <code>QUICKBOOKS_REDIRECT_URI</code> to server env, then <strong>restart</strong>{" "}
-            <code>pnpm dev</code> (see <code>.env.example</code>).
-          </p>
-        ) : !tenantId ? (
-          <p className="alert alert--info" style={{ marginTop: "0.75rem" }}>
-            Select a tenant in the header, save your API key if auth is on, then connect.
-          </p>
-        ) : (
-          <div className="btn-group" style={{ marginTop: "0.75rem" }}>
+      {showApiKeyAdmin ? (
+        <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
+          <h2 className="panel__title">Create tenant API key</h2>
+          {!tenantId ? (
+            <div className="form-field" style={{ marginBottom: "0.75rem" }}>
+              <label className="form-label" htmlFor="bootstrap-tenant">
+                Tenant
+              </label>
+              <select
+                id="bootstrap-tenant"
+                className="input"
+                value={bootstrapSlug}
+                onChange={(e) => setBootstrapSlug(e.target.value)}
+              >
+                {bootstrapSlugs.map((slug) => (
+                  <option key={slug} value={slug}>
+                    {slug}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          <div className="form-row">
+            <div className="form-field">
+              <label className="form-label" htmlFor="key-name">
+                Label
+              </label>
+              <input
+                id="key-name"
+                className="input"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+              />
+            </div>
             <button
               type="button"
               className="btn btn--primary"
-              disabled={actionLoading}
-              onClick={() => void startQuickBooksConnect()}
+              disabled={!canGenerateKey}
+              onClick={() => void createKey()}
             >
-              Connect QuickBooks sandbox
+              Generate key
             </button>
           </div>
-        )}
-      </section>
+          {!canGenerateKey ? (
+            <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
+              Waiting for tenant context…
+            </p>
+          ) : null}
+          {createdRawKey ? (
+            <p className="alert alert--warning" style={{ marginTop: "0.75rem" }}>
+              Copy now — shown once: <code>{createdRawKey}</code>
+            </p>
+          ) : null}
+
+          <ul className="api-list" style={{ marginTop: "1rem" }}>
+            {keys.map((key) => (
+              <li key={key.id}>
+                {key.name} · <code>{key.keyPrefix}…</code> ·{" "}
+                {key.isActive ? "active" : "inactive"}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {showIntegrations ? (
+        <section className="panel panel--muted" style={{ marginBottom: "1.5rem" }}>
+          <h2 className="panel__title">Webhook signing secrets</h2>
+          <p className="panel__desc">
+            HMAC-signed ingest at{" "}
+            <code>POST /api/webhooks/transactions?tenant_slug=…</code>. Requires a saved API key when
+            auth is enabled.
+          </p>
+          <div className="form-row">
+            <div className="form-field">
+              <label className="form-label" htmlFor="webhook-name">
+                Label
+              </label>
+              <input
+                id="webhook-name"
+                className="input"
+                value={newWebhookName}
+                onChange={(e) => setNewWebhookName(e.target.value)}
+                disabled={!tenantId}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!tenantId || actionLoading}
+              onClick={() => void createWebhookSecret()}
+            >
+              Generate webhook secret
+            </button>
+          </div>
+          {createdRawWebhookSecret ? (
+            <p className="alert alert--warning" style={{ marginTop: "0.75rem" }}>
+              Copy now — shown once: <code>{createdRawWebhookSecret}</code>
+            </p>
+          ) : null}
+          <ul className="api-list" style={{ marginTop: "1rem" }}>
+            {webhookSecrets.map((secret) => (
+              <li key={secret.id}>
+                {secret.name} · <code>{secret.secretPrefix}…</code> ·{" "}
+                {secret.isActive ? "active" : "inactive"}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {showIntegrations ? (
+        <section className="panel">
+          <h2 className="panel__title">ERP integration</h2>
+          <p className="panel__desc">
+            AUTO_TAG transactions post to the configured adapter. Connect QuickBooks sandbox OAuth
+            for tenant-scoped posting (set <code>ERP_PROVIDER=quickbooks_sandbox</code>).
+          </p>
+          <p style={{ fontSize: "0.875rem" }}>
+            Provider: <strong>{erpProvider}</strong>
+          </p>
+          {qbConnection ? (
+            <p className="alert alert--success" style={{ marginTop: "0.75rem" }}>
+              QuickBooks connected
+              {qbConnection.realmId ? (
+                <>
+                  {" "}
+                  · realm <code>{qbConnection.realmId}</code>
+                </>
+              ) : null}{" "}
+              · since {new Date(qbConnection.connectedAt).toLocaleString()}
+            </p>
+          ) : (
+            <p className="panel__desc" style={{ marginTop: "0.5rem" }}>
+              QuickBooks not connected for this tenant.
+            </p>
+          )}
+          {!quickbooksConfigured ? (
+            <p className="alert alert--info" style={{ marginTop: "0.75rem" }}>
+              Add <code>QUICKBOOKS_CLIENT_ID</code>, <code>QUICKBOOKS_CLIENT_SECRET</code>, and{" "}
+              <code>QUICKBOOKS_REDIRECT_URI</code> to server env, then <strong>restart</strong>{" "}
+              <code>pnpm dev</code> (see <code>.env.example</code>).
+            </p>
+          ) : !tenantId ? (
+            <p className="alert alert--info" style={{ marginTop: "0.75rem" }}>
+              Select a tenant in the header, save your API key if auth is on, then connect.
+            </p>
+          ) : (
+            <div className="btn-group" style={{ marginTop: "0.75rem" }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={actionLoading}
+                onClick={() => void startQuickBooksConnect()}
+              >
+                Connect QuickBooks sandbox
+              </button>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <ObservabilitySloPanel />
     </PageLayout>

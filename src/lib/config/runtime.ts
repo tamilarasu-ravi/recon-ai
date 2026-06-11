@@ -25,6 +25,33 @@ export function isApiAuthRequired(): boolean {
   return process.env.REQUIRE_API_AUTH?.trim().toLowerCase() === "true";
 }
 
+/**
+ * Returns true when Settings should show webhook and ERP integration panels.
+ *
+ * @returns Whether SETTINGS_SHOW_INTEGRATIONS is enabled (default hidden for showcase).
+ */
+export function isSettingsIntegrationsVisible(): boolean {
+  return process.env.SETTINGS_SHOW_INTEGRATIONS?.trim().toLowerCase() === "true";
+}
+
+/**
+ * Returns true when Settings should show developer ingest and bulk-import panels.
+ *
+ * @returns Whether SETTINGS_SHOW_DEV_TOOLS is enabled (default hidden for showcase).
+ */
+export function isSettingsDevToolsVisible(): boolean {
+  return process.env.SETTINGS_SHOW_DEV_TOOLS?.trim().toLowerCase() === "true";
+}
+
+/**
+ * Returns true when Settings should show tenant API key generation and listing.
+ *
+ * @returns Whether SETTINGS_SHOW_API_KEY_ADMIN is enabled (default hidden for showcase).
+ */
+export function isSettingsApiKeyAdminVisible(): boolean {
+  return process.env.SETTINGS_SHOW_API_KEY_ADMIN?.trim().toLowerCase() === "true";
+}
+
 export interface ProductionConfigIssue {
   code: string;
   message: string;

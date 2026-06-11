@@ -1,8 +1,9 @@
 # Demo script (3–5 minutes)
 
-**Prereqs:** `docker compose up -d`, `pnpm db:seed`, `.env` with `GOOGLE_API_KEY` (or `LLM_ENABLE_LIVE_CALLS=false` for faster deterministic run).
+**Prereqs:** Postgres seeded (`pnpm db:seed` locally, or seeded Neon on Vercel).  
+Use **localhost:3000** or your **public Vercel URL**. API key optional if `LLM_ENABLE_LIVE_CALLS=false`.
 
-## Option A — One command
+## Option A — One command (CLI)
 
 ```bash
 pnpm demo
@@ -10,18 +11,93 @@ pnpm demo
 
 Walk through the nine printed steps (tagging, receipt, override, AP duplicate, **REFUSE**).
 
-## Option B — UI + API (for showcase)
+---
+
+## Option D — Vendor rule learning (UI — “skill reuse”)
+
+**Time:** ~2 minutes · **Tenant:** `tenant-a` · **Beat:** override once → system remembers → second txn auto-codes
+
+This mirrors `pnpm demo` steps 4–6 and is the best UI story for *“every correction becomes a reusable rule.”*
+
+### Before you start
+
+1. Open the app (local or Vercel).
+2. Select company **tenant-a** in the header tenant switcher.
+3. Optional: run `pnpm demo` once in terminal to warm the DB — not required if you follow the steps below.
+
+### Step 1 — First Zephyr transaction (no rule yet)
+
+1. Go to **Review queue** → **Add transaction** (`/review-queue/new`).
+2. Scenario preset: leave **Custom** or pick any preset and edit fields.
+3. Set:
+   - **Vendor:** `Zephyr Labs LLC` (type in custom vendor field if not in dropdown)
+   - **Amount:** `1200.00`
+   - **Memo:** `consulting`
+4. Submit ingest (sync is fine for demo).
+5. When processing completes, open the transaction from the review queue or ingest result link.
+
+**Say:** “New vendor — no rule yet. We queue or refuse rather than silently miscoding.”
+
+**Expect:** `QUEUE_REVIEW` (or similar mid-confidence outcome). Note decision badge on detail page.
+
+### Step 2 — Accountant override → vendor rule
+
+On **transaction detail** (`/transactions/[id]`):
+
+1. Scroll to **Accountant override**.
+2. Choose **GL 6200** (Professional Services) from the CoA dropdown.
+3. Click **Apply override**.
+
+**Say:** “The accountant teaches the system once. We persist a deterministic vendor rule — not fine-tuning, fully auditable.”
+
+**Expect:** Success message; audit shows vendor rule created.
+
+Optional: open **Run trace** and point at override / rule persistence step.
+
+### Step 3 — Replay same vendor (rule hit)
+
+1. Return to **Add transaction** (`/review-queue/new`).
+2. Ingest a **second** transaction:
+   - **Vendor:** `Zephyr Labs LLC` (same spelling)
+   - **Amount:** `50.00`
+   - **Memo:** `follow-on consulting`
+3. Open the new transaction detail when ready.
+
+**Say:** “Same vendor — rule hits first. LLM can be skipped; decision is AUTO_TAG to GL 6200 with high confidence.”
+
+**Expect:** Decision **Auto-coded** (`AUTO_TAG`). In **Run trace**, look for rule-first path / `llm_skipped` or vendor rule step.
+
+**CLI equivalent (same flow):** `pnpm demo` steps 4–6.
+
+---
+
+## Option B — Full UI tour (5 minutes)
 
 ```bash
-pnpm dev
+pnpm dev   # skip if using Vercel
 ```
 
-Open **http://localhost:3000/review-queue** — click a card to open transaction detail. On detail, use **Label memory (RAG)** to see top‑k similar labeled transactions (similarity + GL) for the selected run, then **Run trace** for graph steps. Run `pnpm demo` first to populate queue items.
+Open **Review queue** — use detail panels for RAG neighbors and run trace. Combine with **Option D** above for the learning-loop highlight.
+
+| # | Beat | Where |
+|---|------|-------|
+| 1 | Platform hub | `/` |
+| 2 | AUTO_TAG + vendor rule | Review queue → **Slack** |
+| 3 | Receipt gate | **AWS $99** preset → receipt → reprocess |
+| 4 | **Learning loop** | **Option D** (Zephyr → override → replay) |
+| 5 | REFUSE | Switch to **tenant-b**, ingest **Unknown Courier 42** |
+| 6 | Orchestrator | `/orchestrator` |
+| 7 | AP | `/ap` → recommendation + duplicate |
+| 8 | Audit | Transaction detail → **Run trace** |
+
+---
 
 ## Option C — Live API only
 
+Replace `http://localhost:3000` with your Vercel URL when demoing production.
+
 ```bash
-pnpm dev
+pnpm dev   # skip if calling Vercel URL
 ```
 
 ### 1. Tenants
@@ -63,7 +139,7 @@ curl -s -X POST http://localhost:3000/api/transactions/<TXN_ID>/reprocess \
   -d "{\"tenant_id\":\"$TENANT_ID\"}" | jq
 ```
 
-### 4. Learning loop (override)
+### 4. Learning loop (override) — API variant of Option D
 
 Ingest Zephyr → override GL 6200 → ingest again with same vendor.
 
@@ -105,4 +181,4 @@ curl -s -X POST http://localhost:3000/api/ingest/transactions \
 
 ## Eval mention
 
-`pnpm eval:tagging` — 30 golden cases, **100% pass**, **100% auto-tag precision**, red-team case-08 safe. See `docs/eval-results.md`.
+See README **Eval proof** table and [`docs/eval-results.md`](./eval-results.md): 30 cases, 100% pass, 100% auto-tag precision, red-team case-08 safe. Re-run: `pnpm eval:tagging`.
