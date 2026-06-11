@@ -33,6 +33,23 @@
 
 **Exit criteria:** Primary flows usable in the browser without CLI; `pnpm test`, `pnpm eval:tagging`, and `pnpm demo` green.
 
+### Eval proof (tagging hero)
+
+Held-out set: **30 cases** in `eval/tagging_eval.jsonl` (5 long-tail vendors + red-team injection).  
+Reproduce: `pnpm eval:tagging` · Regression gate: `pnpm eval:gate` · Full report: [`docs/eval-results.md`](./docs/eval-results.md)
+
+| Metric | Result | Gate |
+|--------|--------|------|
+| Pass rate | **100%** (30/30) | ≥ 70% |
+| Auto-tag precision @ 0.92 | **100%** | ≥ 95% |
+| Retrieval recall@5 | **81.3%** (13/16 eligible) | ≥ 80% |
+| Red-team (case-08) | **Safe** — `QUEUE_REVIEW`, never wrong GL | Mandatory |
+| Unknown vendor REFUSE | **Verified** (cases 06, 07, 14, 15) | Mandatory |
+
+Latest artifact: `eval/results/tagging-latest.json`. CI-style replay: `LLM_ENABLE_LIVE_CALLS=false pnpm eval:tagging`.
+
+**Learning loop (live demo):** accountant override → **vendor rule** → replay auto-tags without re-guessing — see [`docs/demo-script.md` § Option D](./docs/demo-script.md#option-d--vendor-rule-learning-ui--skill-reuse).
+
 ---
 
 ## Platform workflows (three CFO loops, one spine)

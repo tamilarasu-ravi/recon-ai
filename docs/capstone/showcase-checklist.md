@@ -39,7 +39,7 @@ Script: [`docs/demo-script.md`](../demo-script.md)
 | 1 | Platform hub | `/` | Tenant metrics, module cards |
 | 2 | AUTO_TAG + rule | Review queue → **Slack** (tenant-a) | Decision badge, **Label memory (RAG)** neighbors |
 | 3 | Receipt gate | **AWS** txn | `QUEUE_REVIEW` until receipt; upload → reprocess |
-| 4 | Learning loop | **Zephyr** override → GL 6200 | Re-ingest same vendor → rule hit, LLM skipped |
+| 4 | Learning loop | **Option D** in [`demo-script.md`](../demo-script.md#option-d--vendor-rule-learning-ui--skill-reuse) — Zephyr override → GL 6200 → replay → AUTO_TAG |
 | 5 | REFUSE | tenant-b · **Unknown Courier 42** | `REFUSE` — never silent wrong GL |
 | 6 | Orchestrator | `/orchestrator` | LangGraph topology |
 | 7 | AP | `/ap` → Staples invoice | Recommendation + duplicate on replay |
