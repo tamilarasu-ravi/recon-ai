@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 
 import {
   collectProductionConfigIssues,
+  isAgenticEvidenceEnabled,
+  isAgenticVerifierLlmEnabled,
   isSettingsApiKeyAdminVisible,
   isSettingsDevToolsVisible,
   isSettingsIntegrationsVisible,
@@ -123,6 +125,70 @@ describe("isSettingsApiKeyAdminVisible", () => {
         process.env.SETTINGS_SHOW_API_KEY_ADMIN = original;
       } else {
         delete process.env.SETTINGS_SHOW_API_KEY_ADMIN;
+      }
+    }
+  });
+});
+
+describe("isAgenticEvidenceEnabled", () => {
+  it("defaults to false when AGENTIC_EVIDENCE_ENABLED is unset or false", () => {
+    const original = process.env.AGENTIC_EVIDENCE_ENABLED;
+
+    delete process.env.AGENTIC_EVIDENCE_ENABLED;
+    assert.equal(isAgenticEvidenceEnabled(), false);
+
+    process.env.AGENTIC_EVIDENCE_ENABLED = "false";
+    assert.equal(isAgenticEvidenceEnabled(), false);
+
+    if (original !== undefined) {
+      process.env.AGENTIC_EVIDENCE_ENABLED = original;
+    } else {
+      delete process.env.AGENTIC_EVIDENCE_ENABLED;
+    }
+  });
+
+  it("returns true only when AGENTIC_EVIDENCE_ENABLED=true", () => {
+    const original = process.env.AGENTIC_EVIDENCE_ENABLED;
+    process.env.AGENTIC_EVIDENCE_ENABLED = "true";
+    try {
+      assert.equal(isAgenticEvidenceEnabled(), true);
+    } finally {
+      if (original !== undefined) {
+        process.env.AGENTIC_EVIDENCE_ENABLED = original;
+      } else {
+        delete process.env.AGENTIC_EVIDENCE_ENABLED;
+      }
+    }
+  });
+});
+
+describe("isAgenticVerifierLlmEnabled", () => {
+  it("defaults to false when AGENTIC_VERIFIER_LLM is unset or false", () => {
+    const original = process.env.AGENTIC_VERIFIER_LLM;
+
+    delete process.env.AGENTIC_VERIFIER_LLM;
+    assert.equal(isAgenticVerifierLlmEnabled(), false);
+
+    process.env.AGENTIC_VERIFIER_LLM = "false";
+    assert.equal(isAgenticVerifierLlmEnabled(), false);
+
+    if (original !== undefined) {
+      process.env.AGENTIC_VERIFIER_LLM = original;
+    } else {
+      delete process.env.AGENTIC_VERIFIER_LLM;
+    }
+  });
+
+  it("returns true only when AGENTIC_VERIFIER_LLM=true", () => {
+    const original = process.env.AGENTIC_VERIFIER_LLM;
+    process.env.AGENTIC_VERIFIER_LLM = "true";
+    try {
+      assert.equal(isAgenticVerifierLlmEnabled(), true);
+    } finally {
+      if (original !== undefined) {
+        process.env.AGENTIC_VERIFIER_LLM = original;
+      } else {
+        delete process.env.AGENTIC_VERIFIER_LLM;
       }
     }
   });

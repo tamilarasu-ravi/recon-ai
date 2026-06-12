@@ -8,6 +8,7 @@ import {
   buildEmbeddingText,
 } from "@/lib/agents/tagging/embed-transaction";
 import { lookupVendorRule } from "@/lib/agents/tagging/rule-lookup";
+import { resolveRetrievalPolicy } from "@/lib/agents/tagging/evidence-policy";
 import { buildRetrievalNeighborAuditRows } from "@/lib/agents/tagging/retrieval-audit";
 import { countLabeledTransactions, retrieveSimilarTransactions } from "@/lib/agents/tagging/retrieval";
 import { suggestTagging } from "@/lib/agents/tagging/suggest";
@@ -181,9 +182,43 @@ export async function runTaggingAgent(
   const labeledCount = await countLabeledTransactions(db, input.tenantId);
   const tenantHasMinHistory = hasMinHistory(labeledCount);
 
+  const retrievalPolicy = resolveRetrievalPolicy({
+    ruleHit,
+    ruleGlAccountId,
+    isNewVendor: vendorResult.isNewVendor,
+    coaAllowList: coaSet,
+    agenticEnabled: env.AGENTIC_EVIDENCE_ENABLED,
+  });
+
   let neighbors: Awaited<ReturnType<typeof retrieveSimilarTransactions>> = [];
   const retrievalStarted = Date.now();
 
+  if (!retrievalPolicy.shouldRetrieve) {
+    steps.push({
+      name: "retrieval",
+      status: "skipped",
+      latency_ms: Date.now() - retrievalStarted,
+      detail: {
+        neighbor_count: 0,
+        skip_reason: retrievalPolicy.skipReason,
+        labeled_corpus_count: labeledCount,
+      },
+    });
+    await traceEmit(
+      "rag-retrieval-skipped",
+      "rag",
+      "RAG retrieval",
+      "skipped",
+      {
+        skip_reason: retrievalPolicy.skipReason,
+        rule_hit: ruleHit,
+        gl_account_id: ruleGlAccountId,
+        labeled_corpus_count: labeledCount,
+      },
+      Date.now() - retrievalStarted,
+      "Vendor rule sufficient — embedding and similarity search skipped (agentic evidence).",
+    );
+  } else {
   try {
     const queryText = buildEmbeddingText(input.vendorRaw, input.memo, input.mcc);
 
@@ -304,6 +339,7 @@ export async function runTaggingAgent(
       { neighbor_count: 0 },
       Date.now() - retrievalStarted,
     );
+  }
   }
 
   const proposedGlFromRule = ruleGlAccountId;

@@ -28,6 +28,14 @@ const envSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   LANGGRAPH_CHECKPOINTER: z.enum(["postgres", "memory"]).default("postgres"),
+  AGENTIC_EVIDENCE_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  AGENTIC_VERIFIER_LLM: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

@@ -52,6 +52,24 @@ export function isSettingsApiKeyAdminVisible(): boolean {
   return process.env.SETTINGS_SHOW_API_KEY_ADMIN?.trim().toLowerCase() === "true";
 }
 
+/**
+ * Returns true when agentic evidence gathering (conditional retrieval, planner) is enabled.
+ *
+ * @returns Whether AGENTIC_EVIDENCE_ENABLED is set to true.
+ */
+export function isAgenticEvidenceEnabled(): boolean {
+  return process.env.AGENTIC_EVIDENCE_ENABLED?.trim().toLowerCase() === "true";
+}
+
+/**
+ * Returns true when the optional LLM evidence verifier is enabled (Phase 3+).
+ *
+ * @returns Whether AGENTIC_VERIFIER_LLM is set to true.
+ */
+export function isAgenticVerifierLlmEnabled(): boolean {
+  return process.env.AGENTIC_VERIFIER_LLM?.trim().toLowerCase() === "true";
+}
+
 export interface ProductionConfigIssue {
   code: string;
   message: string;

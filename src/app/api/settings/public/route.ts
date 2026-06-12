@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import {
+  isAgenticEvidenceEnabled,
+  isAgenticVerifierLlmEnabled,
   isApiAuthRequired,
   isSettingsApiKeyAdminVisible,
   isSettingsDevToolsVisible,
@@ -29,6 +31,8 @@ export async function GET(): Promise<NextResponse> {
     langfuse_host: observability.langfuse_host,
     slo_decision_latency_p95_ms: observability.slo_decision_latency_p95_ms,
     slo_auto_tag_precision_min: observability.slo_auto_tag_precision_min,
+    agentic_evidence_enabled: isAgenticEvidenceEnabled(),
+    agentic_verifier_llm_enabled: isAgenticVerifierLlmEnabled(),
     bootstrap_hint: isSettingsApiKeyAdminVisible()
       ? "When no API key is saved, use Settings → Generate key with tenant slug (first key only)."
       : "When no API key is saved, paste a key from your administrator or run pnpm auth:reset-keys locally.",

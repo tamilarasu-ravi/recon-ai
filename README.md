@@ -2,13 +2,13 @@
 
 **ReconAI** is an event-driven CFO operations platform: a deterministic **orchestrator** runs policy, close tagging, and payables workflows; specialized **agents** return structured decisions; Postgres + pgvector is the system of record.
 
-|                   |                                                                               |
-| ----------------- | ----------------------------------------------------------------------------- |
-| **Version**       | **Phase 1** — operator product (v0.1)                                         |
-| **Status**        | Shipped — see [product roadmap](./docs/product-roadmap.md)                    |
-| **Live demo**     | [recon-ai-ivory.vercel.app](https://recon-ai-ivory.vercel.app/)               |
-| **Strategy**      | [STRATEGY.md](./STRATEGY.md)                                                  |
-| **System design** | [docs/architecture.md](./docs/architecture.md)                                |
+|                   |                                                                 |
+| ----------------- | --------------------------------------------------------------- |
+| **Version**       | **Phase 1** — operator product (v0.1)                           |
+| **Status**        | Shipped — see [product roadmap](./docs/product-roadmap.md)      |
+| **Live demo**     | [recon-ai-ivory.vercel.app](https://recon-ai-ivory.vercel.app/) |
+| **Strategy**      | [STRATEGY.md](./STRATEGY.md)                                    |
+| **System design** | [docs/architecture.md](./docs/architecture.md)                  |
 
 **Not a chatbot.** Tri-state autonomy (`AUTO_TAG` · `QUEUE_REVIEW` · `REFUSE`), rule-first cost control, full audit trails, MCP/API parity with the UI.
 
@@ -23,14 +23,14 @@
 > **Product direction:** [STRATEGY.md](./STRATEGY.md) · [Product roadmap](./docs/product-roadmap.md).  
 > **Academic origin:** capstone checklist, showcase script, and grading artifacts → [docs/capstone/README.md](./docs/capstone/README.md).
 
-| Area | Shipped in Phase 1 |
-| ---- | ------------------ |
-| **Platform** | LangGraph orchestrator, events, audit, review queue, tenant-scoped CoA |
-| **Tagging (hero)** | Tri-state autonomy, vendor rules, pgvector retrieval, eval harness, HITL UI |
-| **Policy** | Hybrid rules, NL compile, receipt gate, `/policy` admin (built-in + custom stored rules) |
-| **AP** | Recommend-only graph, duplicate detection, mock invoices, `/ap` inbox |
-| **Operator UI** | Home hub, review queue, transaction detail, settings, orchestrator trace view |
-| **Integrations (beta)** | MCP tools, webhooks, API keys, async ingest, Playwright smoke E2E |
+| Area                    | Shipped in Phase 1                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| **Platform**            | LangGraph orchestrator, events, audit, review queue, tenant-scoped CoA                   |
+| **Tagging (hero)**      | Tri-state autonomy, vendor rules, pgvector retrieval, eval harness, HITL UI              |
+| **Policy**              | Hybrid rules, NL compile, receipt gate, `/policy` admin (built-in + custom stored rules) |
+| **AP**                  | Recommend-only graph, duplicate detection, mock invoices, `/ap` inbox                    |
+| **Operator UI**         | Home hub, review queue, transaction detail, settings, orchestrator trace view            |
+| **Integrations (beta)** | MCP tools, webhooks, API keys, async ingest, Playwright smoke E2E                        |
 
 **Exit criteria:** Primary flows usable in the browser without CLI; `pnpm test`, `pnpm eval:tagging`, and `pnpm demo` green.
 
@@ -39,13 +39,13 @@
 Held-out set: **30 cases** in `eval/tagging_eval.jsonl` (5 long-tail vendors + red-team injection).  
 Reproduce: `pnpm eval:tagging` · Regression gate: `pnpm eval:gate` · Full report: [`docs/eval-results.md`](./docs/eval-results.md)
 
-| Metric | Result | Gate |
-|--------|--------|------|
-| Pass rate | **100%** (30/30) | ≥ 70% |
-| Auto-tag precision @ 0.92 | **100%** | ≥ 95% |
-| Retrieval recall@5 | **81.3%** (13/16 eligible) | ≥ 80% |
-| Red-team (case-08) | **Safe** — `QUEUE_REVIEW`, never wrong GL | Mandatory |
-| Unknown vendor REFUSE | **Verified** (cases 06, 07, 14, 15) | Mandatory |
+| Metric                    | Result                                    | Gate      |
+| ------------------------- | ----------------------------------------- | --------- |
+| Pass rate                 | **100%** (30/30)                          | ≥ 70%     |
+| Auto-tag precision @ 0.92 | **100%**                                  | ≥ 95%     |
+| Retrieval recall@5        | **81.3%** (13/16 eligible)                | ≥ 80%     |
+| Red-team (case-08)        | **Safe** — `QUEUE_REVIEW`, never wrong GL | Mandatory |
+| Unknown vendor REFUSE     | **Verified** (cases 06, 07, 14, 15)       | Mandatory |
 
 Latest artifact: `eval/results/tagging-latest.json`. CI-style replay: `LLM_ENABLE_LIVE_CALLS=false pnpm eval:tagging`.
 
@@ -210,12 +210,12 @@ See [Workflow 3: AP](#workflow-3-ap-10).
 
 ### Event types (platform)
 
-| Event                | Status   |
-| -------------------- | -------- |
-| `TransactionCreated` | Shipped  |
-| `TransactionTagged`  | Shipped  |
-| `PolicyEvaluated`    | Shipped  |
-| `InvoiceReceived`    | Shipped  |
+| Event                | Status  |
+| -------------------- | ------- |
+| `TransactionCreated` | Shipped |
+| `TransactionTagged`  | Shipped |
+| `PolicyEvaluated`    | Shipped |
+| `InvoiceReceived`    | Shipped |
 
 **Platform invariants**
 
@@ -357,21 +357,21 @@ Full schema, rollout priorities (P0–P3), implement-now vs defer: [hero build s
 
 One repo, one database, minimal framework overhead. Prefer **boring, inspectable code** where gates and audit matter; LangGraph for durable tagging/AP graphs.
 
-| Layer                 | Choice                                                               | Why                                                         |
-| --------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **Runtime**           | Node.js 22+ · TypeScript                                             | Same language for API, orchestrator, eval scripts           |
-| **App**               | [Next.js](https://nextjs.org/) 15 (App Router)                       | API routes + operator UI in one project                     |
-| **Database**          | [PostgreSQL](https://www.postgresql.org/) 16 + pgvector              | Events, audit, tenants, rules, vectors in one DB              |
-| **ORM**               | [Drizzle](https://orm.drizzle.team/)                                 | Migrations + typed schema                                   |
-| **LLM**               | Google Gemini (default) · OpenAI · Anthropic (env-switchable)        | Structured JSON for tagging/policy parse; prose for AP rationale |
-| **Embeddings**        | `gemini-embedding-001` (default) or OpenAI `text-embedding-3-small`  | Tenant-scoped similarity search on transaction descriptions   |
-| **Orchestration**     | LangGraph graphs + deterministic gates                               | Durable tagging/AP steps; orchestrator owns state and audit   |
-| **Policy rules**      | JSON in DB + TS evaluator + NL compile (admin)                       | Built-in types evaluated at runtime; custom rules stored only |
-| **UI**                | Next.js pages — home, review queue, txn detail, policy, AP, settings  | Primary operator surface; CLI scripts for automation          |
-| **CLI / seeds**       | `tsx` scripts in `scripts/`                                          | Seed tenants, replay txn, run eval harness                    |
-| **Observability**     | [Langfuse](https://langfuse.com/) (optional) + audit step traces       | Trace prompts, confidence, retrieval hits per txn             |
-| **Local dev**         | Docker Compose (Postgres + pgvector on host port **5434**)           | Reproducible DB for local dev and demos                       |
-| **Deploy**            | [Vercel](https://recon-ai-ivory.vercel.app/) + [Neon](https://neon.tech/) Postgres (optional) | See [docs/vercel-deploy.md](./docs/vercel-deploy.md)          |
+| Layer             | Choice                                                                                        | Why                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| **Runtime**       | Node.js 22+ · TypeScript                                                                      | Same language for API, orchestrator, eval scripts                |
+| **App**           | [Next.js](https://nextjs.org/) 15 (App Router)                                                | API routes + operator UI in one project                          |
+| **Database**      | [PostgreSQL](https://www.postgresql.org/) 16 + pgvector                                       | Events, audit, tenants, rules, vectors in one DB                 |
+| **ORM**           | [Drizzle](https://orm.drizzle.team/)                                                          | Migrations + typed schema                                        |
+| **LLM**           | Google Gemini (default) · OpenAI · Anthropic (env-switchable)                                 | Structured JSON for tagging/policy parse; prose for AP rationale |
+| **Embeddings**    | `gemini-embedding-001` (default) or OpenAI `text-embedding-3-small`                           | Tenant-scoped similarity search on transaction descriptions      |
+| **Orchestration** | LangGraph graphs + deterministic gates                                                        | Durable tagging/AP steps; orchestrator owns state and audit      |
+| **Policy rules**  | JSON in DB + TS evaluator + NL compile (admin)                                                | Built-in types evaluated at runtime; custom rules stored only    |
+| **UI**            | Next.js pages — home, review queue, txn detail, policy, AP, settings                          | Primary operator surface; CLI scripts for automation             |
+| **CLI / seeds**   | `tsx` scripts in `scripts/`                                                                   | Seed tenants, replay txn, run eval harness                       |
+| **Observability** | [Langfuse](https://langfuse.com/) (optional) + audit step traces                              | Trace prompts, confidence, retrieval hits per txn                |
+| **Local dev**     | Docker Compose (Postgres + pgvector on host port **5434**)                                    | Reproducible DB for local dev and demos                          |
+| **Deploy**        | [Vercel](https://recon-ai-ivory.vercel.app/) + [Neon](https://neon.tech/) Postgres (optional) | See [docs/vercel-deploy.md](./docs/vercel-deploy.md)             |
 
 ### Explicit non-choices
 
@@ -406,16 +406,16 @@ TransactionCreated
 
 Copy [`.env.example`](./.env.example) to `.env.local` — **never commit secrets**. Key groups:
 
-| Group | Variables | Notes |
-| ----- | --------- | ----- |
-| **Database** | `DATABASE_URL` | Local Docker uses port **5434** (see `docker-compose.yml`) |
-| **LLM** | `LLM_PROVIDER`, `GOOGLE_API_KEY` / `OPENAI_API_KEY`, `LLM_MODEL`, `EMBEDDING_MODEL` | Default provider is Google Gemini |
-| **Tagging gates** | `TAG_AUTO_THRESHOLD`, `TAG_REVIEW_THRESHOLD` | Tune after `pnpm eval:tagging` |
-| **Eval / CI** | `LLM_ENABLE_LIVE_CALLS=false` | Deterministic fixture replay without live API |
-| **Auth** | `REQUIRE_API_AUTH` | Set `true` for production; browser can paste API key when enabled |
-| **Showcase UI** | `SETTINGS_SHOW_DEV_TOOLS`, `SETTINGS_SHOW_INTEGRATIONS`, `SETTINGS_SHOW_API_KEY_ADMIN` | Default `false` — hides engineering panels in Settings |
-| **Observability** | `LANGFUSE_*` | Optional trace export |
-| **Async ingest** | `INGEST_ASYNC_DEFAULT`, `WEBHOOK_ASYNC_DEFAULT`, `CRON_SECRET` | See [webhook ingest](./docs/webhook-ingest.md) |
+| Group             | Variables                                                                              | Notes                                                             |
+| ----------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Database**      | `DATABASE_URL`                                                                         | Local Docker uses port **5434** (see `docker-compose.yml`)        |
+| **LLM**           | `LLM_PROVIDER`, `GOOGLE_API_KEY` / `OPENAI_API_KEY`, `LLM_MODEL`, `EMBEDDING_MODEL`    | Default provider is Google Gemini                                 |
+| **Tagging gates** | `TAG_AUTO_THRESHOLD`, `TAG_REVIEW_THRESHOLD`                                           | Tune after `pnpm eval:tagging`                                    |
+| **Eval / CI**     | `LLM_ENABLE_LIVE_CALLS=false`                                                          | Deterministic fixture replay without live API                     |
+| **Auth**          | `REQUIRE_API_AUTH`                                                                     | Set `true` for production; browser can paste API key when enabled |
+| **Showcase UI**   | `SETTINGS_SHOW_DEV_TOOLS`, `SETTINGS_SHOW_INTEGRATIONS`, `SETTINGS_SHOW_API_KEY_ADMIN` | Default `false` — hides engineering panels in Settings            |
+| **Observability** | `LANGFUSE_*`                                                                           | Optional trace export                                             |
+| **Async ingest**  | `INGEST_ASYNC_DEFAULT`, `WEBHOOK_ASYNC_DEFAULT`, `CRON_SECRET`                         | See [webhook ingest](./docs/webhook-ingest.md)                    |
 
 Full list and comments: [`.env.example`](./.env.example).
 
@@ -685,13 +685,13 @@ Phase 1 implements **scale-ready hooks** (tenant isolation, rule-first cost cont
 
 **Phase 2+ (roadmap — not yet product-complete):**
 
-| Defer                      | Implemented in Phase 1 instead              |
-| -------------------------- | ------------------------------------------- |
-| Kafka / SQS / worker pools | `processing_status` + async cron worker     |
-| DB partitioning            | `tenant_id` indexes + idempotent ingest     |
-| Qdrant / Weaviate          | pgvector + tenant-scoped retrieval          |
+| Defer                      | Implemented in Phase 1 instead                 |
+| -------------------------- | ---------------------------------------------- |
+| Kafka / SQS / worker pools | `processing_status` + async cron worker        |
+| DB partitioning            | `tenant_id` indexes + idempotent ingest        |
+| Qdrant / Weaviate          | pgvector + tenant-scoped retrieval             |
 | Full Jaeger / APM          | Step traces in `audit_log` + optional Langfuse |
-| Cost budgets / alerts      | `cost_usd` per run + eval totals            |
+| Cost budgets / alerts      | `cost_usd` per run + eval totals               |
 
 **Also out of scope (future phases):**
 
@@ -794,11 +794,11 @@ pnpm dev                        # /review-queue + transaction detail
 
 For finance-facing demos, Settings hides engineering panels by default (see `.env.example`):
 
-| Flag | Default | Effect |
-| ---- | ------- | ------ |
-| `SETTINGS_SHOW_DEV_TOOLS` | `false` | Hides dev ingest / bulk import |
-| `SETTINGS_SHOW_INTEGRATIONS` | `false` | Hides webhooks / ERP panels |
-| `SETTINGS_SHOW_API_KEY_ADMIN` | `false` | Hides create API key panel |
+| Flag                          | Default | Effect                         |
+| ----------------------------- | ------- | ------------------------------ |
+| `SETTINGS_SHOW_DEV_TOOLS`     | `false` | Hides dev ingest / bulk import |
+| `SETTINGS_SHOW_INTEGRATIONS`  | `false` | Hides webhooks / ERP panels    |
+| `SETTINGS_SHOW_API_KEY_ADMIN` | `false` | Hides create API key panel     |
 
 Set any flag to `true` for integrator or development workflows.
 
