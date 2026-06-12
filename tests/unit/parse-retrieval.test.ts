@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseRetrievalFromObservability } from "@/lib/ui/parse-retrieval";
+import {
+  parseRetrievalFromObservability,
+  wasPlannerFallbackInObservability,
+  wasRetrievalSkippedInObservability,
+} from "@/lib/ui/parse-retrieval";
 
 describe("parseRetrievalFromObservability", () => {
   it("returns null when observability has no steps", () => {
@@ -43,5 +47,29 @@ describe("parseRetrievalFromObservability", () => {
     assert.equal(parsed.neighbors[0]?.glCode, "6100");
     assert.equal(parsed.neighbors[0]?.externalTransactionId, "seed-slack-1");
     assert.ok(parsed.labeledCorpusHint?.includes("15"));
+  });
+
+  it("detects planner fallback from evidence_plan step", () => {
+    assert.equal(
+      wasPlannerFallbackInObservability({
+        steps: [{ name: "evidence_plan", status: "ok", latency_ms: 1, detail: { source: "fallback" } }],
+      }),
+      true,
+    );
+    assert.equal(
+      wasPlannerFallbackInObservability({
+        steps: [{ name: "evidence_plan", status: "ok", latency_ms: 1, detail: { source: "llm" } }],
+      }),
+      false,
+    );
+  });
+
+  it("detects skipped retrieval in observability steps", () => {
+    assert.equal(
+      wasRetrievalSkippedInObservability({
+        steps: [{ name: "retrieval", status: "skipped", latency_ms: 0, detail: { skip_reason: "vendor_rule_sufficient" } }],
+      }),
+      true,
+    );
   });
 });

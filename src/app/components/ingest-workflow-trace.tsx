@@ -168,6 +168,100 @@ export function PipelineWorkflowTrace({
 /** Alias for PipelineWorkflowTrace (ingest form). */
 export const IngestWorkflowTrace = PipelineWorkflowTrace;
 
+/**
+ * Renders evidence planner step metadata (tools, source, rationale).
+ *
+ * @param props - Pipeline trace step payload for planner phase.
+ * @returns Detail block or null when no planner fields present.
+ */
+function PlannerTraceDetail({
+  step,
+}: {
+  step: PipelineTraceStepPayload;
+}): React.ReactElement | null {
+  const detail = step.detail;
+  if (!detail) {
+    return null;
+  }
+
+  const tools = Array.isArray(detail.tools) ? detail.tools.map(String) : [];
+  const rationale = typeof detail.rationale === "string" ? detail.rationale : null;
+  const source = typeof detail.source === "string" ? detail.source : null;
+  const summary = typeof detail.summary === "string" ? detail.summary : null;
+
+  if (tools.length === 0 && !rationale && !summary) {
+    return null;
+  }
+
+  return (
+    <div className="workflow-trace__planner">
+      {step.step_id === "evidence-plan" && tools.length > 0 ? (
+        <p className="workflow-trace__meta">
+          Tools:{" "}
+          {tools.map((tool) => (
+            <span key={tool} className="badge badge--reason" style={{ marginRight: "0.35rem" }}>
+              {tool.replace(/_/g, " ")}
+            </span>
+          ))}
+          {source ? (
+            <span style={{ marginLeft: "0.35rem", fontSize: "0.8125rem" }}>
+              · source: <strong>{source}</strong>
+            </span>
+          ) : null}
+        </p>
+      ) : null}
+      {rationale ? (
+        <p className="workflow-trace__description" style={{ marginTop: "0.35rem" }}>
+          {rationale}
+        </p>
+      ) : null}
+      {summary ? (
+        <p className="workflow-trace__meta">
+          <code style={{ fontSize: "0.8125rem" }}>{summary}</code>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Renders heuristic verifier concerns from the evidence-verify step.
+ *
+ * @param props - Step detail object from pipeline trace.
+ * @returns Detail block or null when empty.
+ */
+function VerifierTraceDetail({
+  detail,
+}: {
+  detail: Record<string, unknown>;
+}): React.ReactElement | null {
+  const concerns = Array.isArray(detail.concerns) ? detail.concerns.map(String) : [];
+  const forceReview = detail.force_review === true;
+  const reason = typeof detail.reason === "string" ? detail.reason : null;
+
+  if (!forceReview && concerns.length === 0 && !reason) {
+    return null;
+  }
+
+  return (
+    <div className="workflow-trace__verifier">
+      {forceReview ? (
+        <p className="workflow-trace__meta">
+          <span className="badge badge--reason">Force review</span>
+          {reason ? <span style={{ marginLeft: "0.5rem" }}>{reason}</span> : null}
+        </p>
+      ) : null}
+      {concerns.length > 0 ? (
+        <ul className="workflow-trace__neighbor-list">
+          {concerns.map((concern) => (
+            <li key={concern}>{concern}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 interface WorkflowTraceStepItemProps {
   step: PipelineTraceStepPayload;
   index: number;
@@ -262,6 +356,22 @@ function WorkflowTraceStepItem({ step, index }: WorkflowTraceStepItemProps): Rea
           {Array.isArray(step.detail.matched_rules) && step.detail.matched_rules.length > 0
             ? ` · ${step.detail.matched_rules.length} rule(s) matched`
             : null}
+        </p>
+      ) : null}
+
+      {step.phase === "planner" ? (
+        <PlannerTraceDetail step={step} />
+      ) : null}
+
+      {step.phase === "verifier" && step.detail ? (
+        <VerifierTraceDetail detail={step.detail} />
+      ) : null}
+
+      {step.phase === "rag" &&
+      step.status === "skipped" &&
+      step.detail?.skip_reason ? (
+        <p className="workflow-trace__meta">
+          Skipped: <strong>{String(step.detail.skip_reason)}</strong>
         </p>
       ) : null}
 

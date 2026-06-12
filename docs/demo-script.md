@@ -88,7 +88,25 @@ Open **Review queue** — use detail panels for RAG neighbors and run trace. Com
 | 5 | REFUSE | Switch to **tenant-b**, ingest **Unknown Courier 42** |
 | 6 | Orchestrator | `/orchestrator` |
 | 7 | AP | `/ap` → recommendation + duplicate |
-| 8 | Audit | Transaction detail → **Run trace** |
+| 8 | Audit | Transaction detail → **Run trace** / **Live pipeline trace** |
+
+---
+
+## Option E — Agentic evidence (develop / preview only)
+
+**Time:** ~1 minute · **Requires:** `AGENTIC_EVIDENCE_ENABLED=true` (Vercel preview on `develop`, or local `.env`)
+
+1. Open **tenant-a** → find an **AWS** or **Slack** transaction (vendor rule exists).
+2. Click **Reprocess** (or upload receipt → reprocess on AWS).
+3. Watch **Live pipeline trace** on the detail page:
+   - **Evidence plan** — tools selected (`vendor_rules`, optional `policy_context`)
+   - **RAG retrieval skipped** — `vendor_rule_sufficient` when rule + known vendor
+   - **Evidence verify** — heuristic concerns (if any)
+4. Compare with **Zephyr** (cold start) — planner should include `similar_transactions`.
+
+**Say:** “The planner decides which evidence to gather — we skip expensive retrieval when the vendor rule is enough. Tri-state gates and CoA checks are unchanged.”
+
+**Eval proof:** `pnpm eval:tagging` with flag on → ~60% retrieval skipped, 30/30 pass (see `docs/eval-results.md`).
 
 ---
 

@@ -22,6 +22,14 @@ _Updated from `eval/results/tagging-latest.json` — do not edit by hand._
 
 Aggregate cost **$0.0000** · **0** tokens (deterministic fixtures).
 
+**Agentic evidence** (`AGENTIC_EVIDENCE_ENABLED=true`):
+
+| Metric | Value |
+|--------|-------|
+| Retrieval skipped | 18 (60.0%) |
+| Planner fallback | 30 |
+| Verifier force review | 0 |
+
 Eval set: `tagging-v1` · AUTO threshold **0.92**.
 
 

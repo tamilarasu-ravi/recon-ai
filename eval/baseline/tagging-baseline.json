@@ -289,6 +289,7 @@
   "retrieval_skipped_count": 18,
   "retrieval_skipped_rate": 0.6,
   "verifier_force_review_count": 0,
+  "planner_fallback_count": 30,
   "agentic_assertion_failures": [],
   "threshold_auto": 0.92,
   "failures": [],

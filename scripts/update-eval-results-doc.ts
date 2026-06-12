@@ -31,6 +31,11 @@ interface EvalSummary {
   total_cost_usd?: number;
   total_tokens?: number;
   llm_enable_live_calls: boolean;
+  agentic_evidence_enabled?: boolean;
+  retrieval_skipped_count?: number;
+  retrieval_skipped_rate?: number;
+  planner_fallback_count?: number;
+  verifier_force_review_count?: number;
   threshold_auto: number;
   failures: unknown[];
 }
@@ -59,6 +64,24 @@ function buildSummaryBlock(summary: EvalSummary): string {
       ? `Aggregate cost **$${summary.total_cost_usd.toFixed(4)}** · **${summary.total_tokens}** tokens (${mode}).`
       : `Mode: **${mode}**.`;
 
+  const agenticLines: string[] = [];
+  if (summary.agentic_evidence_enabled) {
+    const skippedRate =
+      summary.retrieval_skipped_rate !== undefined
+        ? (summary.retrieval_skipped_rate * 100).toFixed(1)
+        : "—";
+    agenticLines.push(
+      "",
+      "**Agentic evidence** (`AGENTIC_EVIDENCE_ENABLED=true`):",
+      "",
+      "| Metric | Value |",
+      "|--------|-------|",
+      `| Retrieval skipped | ${summary.retrieval_skipped_count ?? "—"} (${skippedRate}%) |`,
+      `| Planner fallback | ${summary.planner_fallback_count ?? "—"} |`,
+      `| Verifier force review | ${summary.verifier_force_review_count ?? "—"} |`,
+    );
+  }
+
   return [
     START_MARKER,
     "",
@@ -74,6 +97,7 @@ function buildSummaryBlock(summary: EvalSummary): string {
     `| LLM calls saved by rules (proxy) | ${summary.llm_calls_saved_by_rules} | — |`,
     "",
     costLine,
+    ...agenticLines,
     "",
     `Eval set: \`${summary.eval_set_version}\` · AUTO threshold **${summary.threshold_auto}**.`,
     summary.failures.length > 0

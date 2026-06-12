@@ -95,6 +95,39 @@ export function wasRetrievalSkippedInObservability(observability: unknown): bool
   return retrievalStep?.status === "skipped";
 }
 
+/**
+ * Returns true when the evidence planner used a heuristic/fallback plan (not live LLM).
+ *
+ * @param observability - Raw audit_log.observability JSON.
+ * @returns Whether evidence_plan step source is fallback.
+ */
+export function wasPlannerFallbackInObservability(observability: unknown): boolean {
+  if (!observability || typeof observability !== "object") {
+    return false;
+  }
+
+  const steps = (observability as { steps?: unknown }).steps;
+  if (!Array.isArray(steps)) {
+    return false;
+  }
+
+  const planStep = steps.find(
+    (step): step is StepSpan =>
+      typeof step === "object" &&
+      step !== null &&
+      "name" in step &&
+      (step as StepSpan).name === "evidence_plan",
+  );
+
+  const source = planStep?.detail;
+  return (
+    typeof source === "object" &&
+    source !== null &&
+    "source" in source &&
+    source.source === "fallback"
+  );
+}
+
 function parseNeighborRow(row: unknown): ParsedRetrievalNeighbor | null {
   if (!row || typeof row !== "object") {
     return null;

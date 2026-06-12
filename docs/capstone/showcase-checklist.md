@@ -44,6 +44,7 @@ Script: [`docs/demo-script.md`](../demo-script.md)
 | 6 | Orchestrator | `/orchestrator` | LangGraph topology |
 | 7 | AP | `/ap` → Staples invoice | Recommendation + duplicate on replay |
 | 8 | Audit | Transaction detail · **Run trace** | `run_id`, graph steps, token/cost if live |
+| 8b | Agentic evidence (preview) | Reprocess **AWS** with flag on | Live trace: **Evidence plan** → skipped RAG → verifier |
 | 9 | Agent-native | (optional) `pnpm mcp` | `ingest_transaction`, `get_review_queue` |
 
 **Tenant switch:** changing tenant on a txn detail URL redirects to queue — by design.
@@ -57,6 +58,7 @@ Script: [`docs/demo-script.md`](../demo-script.md)
 3. **Rule-first** — vendor rules skip LLM; overrides create rules.
 4. **RAG** — pgvector neighbors in prompt + UI panel (not a black box).
 5. **Eval-gated** — `pnpm eval:tagging` 30 cases, red-team case-08 safe.
+6. **Agentic evidence (develop)** — planner selects tools; known-vendor rules skip retrieval; gates unchanged.
 
 ---
 

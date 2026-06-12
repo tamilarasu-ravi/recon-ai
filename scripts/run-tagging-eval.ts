@@ -20,7 +20,11 @@ import {
 import { parseLlmUsageFromObservability } from "@/lib/observability/llm-cost";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
-import { parseRetrievalFromObservability, wasRetrievalSkippedInObservability } from "@/lib/ui/parse-retrieval";
+import {
+  parseRetrievalFromObservability,
+  wasPlannerFallbackInObservability,
+  wasRetrievalSkippedInObservability,
+} from "@/lib/ui/parse-retrieval";
 
 loadDotenv({ path: ".env.local" });
 loadDotenv({ path: ".env" });
@@ -296,6 +300,7 @@ async function main(): Promise<void> {
   let totalCompletionTokens = 0;
   let retrievalSkippedCount = 0;
   let verifierForceReviewCount = 0;
+  let plannerFallbackCount = 0;
   let agenticAssertionFailures: string[] = [];
 
   // Commit cleanup in its own transaction so tenant-scoped eval runs see deleted rows.
@@ -381,6 +386,10 @@ async function main(): Promise<void> {
 
         if (retrievalSkipped) {
           retrievalSkippedCount += 1;
+        }
+
+        if (observability && wasPlannerFallbackInObservability(observability)) {
+          plannerFallbackCount += 1;
         }
 
         if (
@@ -505,6 +514,7 @@ async function main(): Promise<void> {
     retrieval_skipped_count: retrievalSkippedCount,
     retrieval_skipped_rate: Number((retrievalSkippedCount / cases.length).toFixed(4)),
     verifier_force_review_count: verifierForceReviewCount,
+    planner_fallback_count: plannerFallbackCount,
     agentic_assertion_failures: agenticAssertionFailures,
     threshold_auto: env.TAG_AUTO_THRESHOLD,
     failures: results.filter((row) => !row.passed),
@@ -528,6 +538,7 @@ async function main(): Promise<void> {
       `  retrieval_skipped: ${summary.retrieval_skipped_count}/${summary.case_count} (${(summary.retrieval_skipped_rate * 100).toFixed(1)}%)`,
     );
     console.log(`  verifier_force_review: ${summary.verifier_force_review_count}`);
+    console.log(`  planner_fallback: ${summary.planner_fallback_count}`);
   }
   console.log(`  total_cost_usd: ${summary.total_cost_usd}`);
   console.log(`  total_tokens: ${summary.total_tokens}`);
