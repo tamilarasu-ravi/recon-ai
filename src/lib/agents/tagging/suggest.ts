@@ -20,6 +20,8 @@ export interface SuggestTaggingInput {
   neighbors: RetrievalNeighbor[];
   ruleGlAccountId?: string;
   globalPriorHint?: string;
+  policyContextSummary?: string;
+  invoiceMatchSummary?: string;
 }
 
 export interface SuggestTaggingResult {
@@ -108,6 +110,8 @@ export async function suggestTagging(
         neighbors: input.neighbors,
         ruleGlAccountId: input.ruleGlAccountId,
         globalPriorHint: input.globalPriorHint,
+        policyContextSummary: input.policyContextSummary,
+        invoiceMatchSummary: input.invoiceMatchSummary,
       }),
       schema: taggingSuggestionSchema,
       promptVersion: TAGGING_PROMPT_VERSION,

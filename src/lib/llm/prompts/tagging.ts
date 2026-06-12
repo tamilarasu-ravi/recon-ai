@@ -30,6 +30,8 @@ export function buildTaggingUserPrompt(params: {
   neighbors: Array<{ glAccountId: string; similarity: number }>;
   ruleGlAccountId?: string;
   globalPriorHint?: string;
+  policyContextSummary?: string;
+  invoiceMatchSummary?: string;
 }): string {
   const coaLines = params.coaEntries
     .map((entry) => `- ${entry.id} | ${entry.glCode} | ${entry.glName}`)
@@ -56,6 +58,12 @@ export function buildTaggingUserPrompt(params: {
     neighborLines,
     params.ruleGlAccountId ? `\nVendor rule GL: ${params.ruleGlAccountId}` : "",
     params.globalPriorHint ? `\nGlobal prior hint (non-binding): ${params.globalPriorHint}` : "",
+    params.policyContextSummary
+      ? `\nPolicy context:\n${params.policyContextSummary}`
+      : "",
+    params.invoiceMatchSummary
+      ? `\nInvoice matches:\n${params.invoiceMatchSummary}`
+      : "",
     "",
     'Return JSON: { "gl_account_id": "<uuid>", "tax_code"?: string, "dimensions"?: {}, "rationale": string }',
   ]

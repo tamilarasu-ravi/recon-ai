@@ -10,6 +10,13 @@ import {
 import { lookupVendorRule } from "@/lib/agents/tagging/rule-lookup";
 import { resolveRetrievalPolicy } from "@/lib/agents/tagging/evidence-policy";
 import {
+  planEvidence,
+  shouldRetrieveFromPlan,
+  type EvidencePlan,
+} from "@/lib/agents/tagging/evidence-planner";
+import { executeEvidenceTools } from "@/lib/agents/tagging/evidence-tools";
+import type { PolicyOutcome } from "@/lib/agents/policy/types";
+import {
   applyVerifierToGate,
   verifyEvidence,
   type VerifierResult,
@@ -43,6 +50,9 @@ export interface TaggingAgentInput {
   currency: string;
   mcc?: string;
   receiptRequiredAndNotCleared?: boolean;
+  policyOutcome?: PolicyOutcome;
+  policyVersion?: string;
+  matchedPolicyRules?: Array<{ ruleType: string; reason: string }>;
   /** When set, emits PipelineTraceStep events for live ingest UI. */
   trace?: PipelineTraceContext;
 }
@@ -187,13 +197,104 @@ export async function runTaggingAgent(
   const labeledCount = await countLabeledTransactions(db, input.tenantId);
   const tenantHasMinHistory = hasMinHistory(labeledCount);
 
-  const retrievalPolicy = resolveRetrievalPolicy({
-    ruleHit,
-    ruleGlAccountId,
-    isNewVendor: vendorResult.isNewVendor,
-    coaAllowList: coaSet,
-    agenticEnabled: env.AGENTIC_EVIDENCE_ENABLED,
-  });
+  const policyOutcome = input.policyOutcome ?? "ALLOW";
+  const matchedPolicyRules = input.matchedPolicyRules ?? [];
+  let evidencePlan: EvidencePlan | null = null;
+  let policyContextSummary: string | undefined;
+  let invoiceMatchSummary: string | undefined;
+
+  if (env.AGENTIC_EVIDENCE_ENABLED) {
+    const plannerStarted = Date.now();
+    evidencePlan = await planEvidence(env, {
+      vendorRaw: input.vendorRaw,
+      memo: input.memo,
+      amount: input.amount,
+      currency: input.currency,
+      vendorId: vendorResult.vendorId,
+      isNewVendor: vendorResult.isNewVendor,
+      ruleHit,
+      ruleGlAccountId,
+      labeledCorpusCount: labeledCount,
+      policyOutcome,
+      receiptBlocked,
+      coaAllowList: coaSet,
+    });
+
+    steps.push({
+      name: "evidence_plan",
+      status: "ok",
+      latency_ms: Date.now() - plannerStarted,
+      detail: {
+        tools: evidencePlan.tools,
+        source: evidencePlan.source,
+        rationale: evidencePlan.rationale,
+      },
+    });
+    await traceEmit(
+      "evidence-plan",
+      "planner",
+      "Evidence plan",
+      "complete",
+      {
+        tools: evidencePlan.tools,
+        source: evidencePlan.source,
+        rationale: evidencePlan.rationale,
+      },
+      Date.now() - plannerStarted,
+      "LLM selects evidence tools before tagging.",
+    );
+
+    const toolStarted = Date.now();
+    const toolExecution = await executeEvidenceTools(db, env, evidencePlan, {
+      tenantId: input.tenantId,
+      vendorRaw: input.vendorRaw,
+      vendorId: vendorResult.vendorId,
+      ruleHit,
+      ruleGlAccountId,
+      policyOutcome,
+      policyVersion: input.policyVersion,
+      matchedPolicyRules,
+      receiptBlocked,
+    });
+
+    policyContextSummary = toolExecution.policyContextSummary ?? undefined;
+    invoiceMatchSummary = toolExecution.invoiceMatchSummary ?? undefined;
+
+    for (const toolResult of toolExecution.results) {
+      await traceEmit(
+        `evidence-tool-${toolResult.tool}`,
+        "planner",
+        `Evidence: ${toolResult.tool.replace(/_/g, " ")}`,
+        toolResult.status === "error"
+          ? "error"
+          : toolResult.status === "skipped"
+            ? "skipped"
+            : "complete",
+        toolResult.detail,
+        Date.now() - toolStarted,
+      );
+    }
+  }
+
+  const retrievalPolicy =
+    env.AGENTIC_EVIDENCE_ENABLED && evidencePlan
+      ? {
+          shouldRetrieve: shouldRetrieveFromPlan(evidencePlan),
+          skipReason: shouldRetrieveFromPlan(evidencePlan)
+            ? ("no_rule_hit" as const)
+            : ruleHit &&
+                ruleGlAccountId !== undefined &&
+                isGlInCoaAllowList(ruleGlAccountId, coaSet)
+              ? ("vendor_rule_sufficient" as const)
+              : ("planner_omitted_retrieval" as const),
+        }
+      : resolveRetrievalPolicy({
+          ruleHit,
+          ruleGlAccountId,
+          isNewVendor: vendorResult.isNewVendor,
+          coaAllowList: coaSet,
+          agenticEnabled: env.AGENTIC_EVIDENCE_ENABLED,
+        });
 
   let neighbors: Awaited<ReturnType<typeof retrieveSimilarTransactions>> = [];
   const retrievalStarted = Date.now();
@@ -392,6 +493,8 @@ export async function runTaggingAgent(
       neighbors,
       ruleGlAccountId,
       globalPriorHint,
+      policyContextSummary,
+      invoiceMatchSummary,
     },
     canSkipLlm ? { skipLlm: true, skipReason: "vendor_rule_hit" } : undefined,
   );

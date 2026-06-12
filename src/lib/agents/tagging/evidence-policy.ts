@@ -13,7 +13,8 @@ export type RetrievalSkipReason =
   | "new_vendor_requires_retrieval"
   | "no_rule_hit"
   | "rule_gl_not_in_coa"
-  | "vendor_rule_sufficient";
+  | "vendor_rule_sufficient"
+  | "planner_omitted_retrieval";
 
 export interface RetrievalPolicyResult {
   shouldRetrieve: boolean;

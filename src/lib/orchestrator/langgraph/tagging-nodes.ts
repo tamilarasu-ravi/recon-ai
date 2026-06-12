@@ -221,6 +221,9 @@ export async function runTaggingNode(
     currency: state.currency,
     mcc: state.mcc,
     receiptRequiredAndNotCleared: state.receiptBlocked,
+    policyOutcome: state.policyResult?.outcome ?? "ALLOW",
+    policyVersion: state.policyResult?.policyVersion,
+    matchedPolicyRules: state.policyResult?.matchedRules ?? [],
     trace: {
       tenantId: state.tenantId,
       transactionId: state.transactionId,

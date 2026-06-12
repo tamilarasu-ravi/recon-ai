@@ -222,20 +222,25 @@ export function TransactionDetailClient(): React.ReactElement {
     decision?: string;
     reason?: string;
     confidence?: number;
+    run_id?: string;
   }> {
     if (!tenantId) {
       throw new Error("Select a tenant first");
     }
-    const response = await apiFetch(`/api/transactions/${transactionId}/reprocess`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenant_id: tenantId }),
-    });
+    const response = await apiFetch(
+      `/api/transactions/${transactionId}/reprocess?tenant_id=${encodeURIComponent(tenantId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_id: tenantId }),
+      },
+    );
     const body = (await response.json()) as {
       error?: string;
       decision?: string;
       reason?: string;
       confidence?: number;
+      run_id?: string;
     };
     if (!response.ok) {
       throw new Error(body.error ?? `HTTP ${response.status}`);
@@ -255,6 +260,9 @@ export function TransactionDetailClient(): React.ReactElement {
           body.confidence !== undefined ? ` · confidence ${body.confidence.toFixed(4)}` : ""
         }`,
       );
+      if (body.run_id) {
+        selectRun(body.run_id);
+      }
       invalidateReviewQueueCache(tenantId);
       await loadDetail();
     } catch (err) {
@@ -294,6 +302,9 @@ export function TransactionDetailClient(): React.ReactElement {
             : ""
         }`,
       );
+      if (reprocessBody.run_id) {
+        selectRun(reprocessBody.run_id);
+      }
       invalidateReviewQueueCache(tenantId);
       await loadDetail();
     } catch (err) {
