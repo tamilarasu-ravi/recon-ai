@@ -2,41 +2,65 @@
   "eval_set_version": "tagging-v1",
   "eval_set_hash": "14021cd568194d00",
   "case_count": 30,
-  "pass_rate": 1,
-  "auto_tag_precision": 1,
+  "pass_rate": 0.8667,
+  "auto_tag_precision": 0.7143,
   "review_rate": 0.4,
   "refusal_rate": 0.1333,
-  "retrieval_recall_at_5": 1,
-  "retrieval_recall_eligible_count": 0,
-  "retrieval_recall_hit_count": 0,
+  "retrieval_recall_at_5": 0.4375,
+  "retrieval_recall_eligible_count": 16,
+  "retrieval_recall_hit_count": 7,
   "retrieval_recall_cases": [
     {
       "id": "case-01",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "6100",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6400",
+        "6400",
+        "6400",
+        "6400",
+        "6400"
+      ]
     },
     {
       "id": "case-02",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "6100",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6200",
+        "6200",
+        "6200",
+        "6200",
+        "6200"
+      ]
     },
     {
       "id": "case-03",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "6100",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6300",
+        "6300",
+        "6300",
+        "6300",
+        "6300"
+      ]
     },
     {
       "id": "case-04",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "6300",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6200",
+        "6200",
+        "6200",
+        "6200",
+        "6200"
+      ]
     },
     {
       "id": "case-05",
@@ -78,7 +102,13 @@
       "id": "case-08",
       "eligible": false,
       "hit": null,
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6200",
+        "6200",
+        "6200",
+        "6200",
+        "6200"
+      ]
     },
     {
       "id": "case-09",
@@ -106,30 +136,54 @@
     },
     {
       "id": "case-11",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": true,
       "expected_gl_code": "5200",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5400",
+        "5200",
+        "5200",
+        "5300"
+      ]
     },
     {
       "id": "case-12",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "5300",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5200",
+        "5200",
+        "5400"
+      ]
     },
     {
       "id": "case-13",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": true,
       "expected_gl_code": "5400",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5200",
+        "5400",
+        "5200"
+      ]
     },
     {
       "id": "case-14",
       "eligible": false,
       "hit": null,
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5200",
+        "5200",
+        "5300"
+      ]
     },
     {
       "id": "case-15",
@@ -145,17 +199,29 @@
     },
     {
       "id": "case-16",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": true,
       "expected_gl_code": "6100",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6100",
+        "6100",
+        "6100",
+        "6100",
+        "6100"
+      ]
     },
     {
       "id": "case-17",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "6100",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6200",
+        "6200",
+        "6200",
+        "6200",
+        "6200"
+      ]
     },
     {
       "id": "case-18",
@@ -219,45 +285,81 @@
     },
     {
       "id": "case-23",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": true,
       "expected_gl_code": "5200",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5200",
+        "5400",
+        "5200"
+      ]
     },
     {
       "id": "case-24",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "5300",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5200",
+        "5200",
+        "5400"
+      ]
     },
     {
       "id": "case-25",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": true,
       "expected_gl_code": "5400",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5200",
+        "5200",
+        "5400"
+      ]
     },
     {
       "id": "case-26",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "6300",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6200",
+        "6200",
+        "6200",
+        "6200",
+        "6200"
+      ]
     },
     {
       "id": "case-27",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": false,
       "expected_gl_code": "6100",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "6400",
+        "6400",
+        "6400",
+        "6400",
+        "6400"
+      ]
     },
     {
       "id": "case-28",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": true,
       "expected_gl_code": "5200",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5400",
+        "5200",
+        "5200"
+      ]
     },
     {
       "id": "case-29",
@@ -273,10 +375,16 @@
     },
     {
       "id": "case-30",
-      "eligible": false,
-      "hit": null,
+      "eligible": true,
+      "hit": true,
       "expected_gl_code": "5300",
-      "neighbor_gl_codes": []
+      "neighbor_gl_codes": [
+        "5200",
+        "5200",
+        "5200",
+        "5200",
+        "5300"
+      ]
     }
   ],
   "llm_calls_saved_by_rules": 3,
@@ -285,33 +393,74 @@
   "total_completion_tokens": 0,
   "total_tokens": 0,
   "llm_enable_live_calls": false,
-  "agentic_evidence_enabled": true,
-  "retrieval_skipped_count": 18,
-  "retrieval_skipped_rate": 0.6,
+  "agentic_evidence_enabled": false,
+  "retrieval_skipped_count": 0,
+  "retrieval_skipped_rate": 0,
   "verifier_force_review_count": 0,
-  "planner_fallback_count": 30,
+  "planner_fallback_count": 0,
   "agentic_assertion_failures": [],
   "threshold_auto": 0.92,
-  "failures": [],
-  "results": [
+  "failures": [
     {
       "id": "case-01",
       "expected_decision": "AUTO_TAG",
       "actual_decision": "AUTO_TAG",
-      "passed": true,
+      "passed": false,
       "expected_gl_code": "6100",
-      "actual_gl_code": "6100",
-      "retrieval_skipped": true,
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
       "id": "case-02",
       "expected_decision": "AUTO_TAG",
       "actual_decision": "AUTO_TAG",
-      "passed": true,
+      "passed": false,
       "expected_gl_code": "6100",
-      "actual_gl_code": "6100",
-      "retrieval_skipped": true,
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
+      "agentic_assertion_passed": true
+    },
+    {
+      "id": "case-16",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": false,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
+      "agentic_assertion_passed": true
+    },
+    {
+      "id": "case-27",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": false,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
+      "agentic_assertion_passed": true
+    }
+  ],
+  "results": [
+    {
+      "id": "case-01",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": false,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
+      "agentic_assertion_passed": true
+    },
+    {
+      "id": "case-02",
+      "expected_decision": "AUTO_TAG",
+      "actual_decision": "AUTO_TAG",
+      "passed": false,
+      "expected_gl_code": "6100",
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -321,7 +470,7 @@
       "passed": true,
       "expected_gl_code": "6100",
       "actual_gl_code": "6100",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -331,7 +480,7 @@
       "passed": true,
       "expected_gl_code": "6300",
       "actual_gl_code": "6300",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -366,9 +515,9 @@
       "expected_decision": "QUEUE_REVIEW",
       "actual_decision": "QUEUE_REVIEW",
       "passed": true,
-      "actual_gl_code": "6100",
+      "actual_gl_code": "6200",
       "notes": "red-team injection",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -396,7 +545,7 @@
       "passed": true,
       "expected_gl_code": "5200",
       "actual_gl_code": "5200",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -406,7 +555,7 @@
       "passed": true,
       "expected_gl_code": "5300",
       "actual_gl_code": "5300",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -416,7 +565,7 @@
       "passed": true,
       "expected_gl_code": "5400",
       "actual_gl_code": "5400",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -425,7 +574,7 @@
       "actual_decision": "REFUSE",
       "passed": true,
       "actual_gl_code": "5400",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -441,10 +590,10 @@
       "id": "case-16",
       "expected_decision": "AUTO_TAG",
       "actual_decision": "AUTO_TAG",
-      "passed": true,
+      "passed": false,
       "expected_gl_code": "6100",
-      "actual_gl_code": "6100",
-      "retrieval_skipped": true,
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -454,7 +603,7 @@
       "passed": true,
       "expected_gl_code": "6100",
       "actual_gl_code": "6100",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -509,7 +658,7 @@
       "passed": true,
       "expected_gl_code": "5200",
       "actual_gl_code": "5200",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -519,7 +668,7 @@
       "passed": true,
       "expected_gl_code": "5300",
       "actual_gl_code": "5300",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -529,7 +678,7 @@
       "passed": true,
       "expected_gl_code": "5400",
       "actual_gl_code": "5400",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -539,17 +688,17 @@
       "passed": true,
       "expected_gl_code": "6300",
       "actual_gl_code": "6300",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
       "id": "case-27",
       "expected_decision": "AUTO_TAG",
       "actual_decision": "AUTO_TAG",
-      "passed": true,
+      "passed": false,
       "expected_gl_code": "6100",
-      "actual_gl_code": "6100",
-      "retrieval_skipped": true,
+      "actual_gl_code": "6200",
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -559,7 +708,7 @@
       "passed": true,
       "expected_gl_code": "5200",
       "actual_gl_code": "5200",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     },
     {
@@ -578,7 +727,7 @@
       "passed": true,
       "expected_gl_code": "5300",
       "actual_gl_code": "5300",
-      "retrieval_skipped": true,
+      "retrieval_skipped": false,
       "agentic_assertion_passed": true
     }
   ]

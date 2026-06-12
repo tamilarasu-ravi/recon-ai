@@ -83,12 +83,12 @@ Open **Review queue** — use detail panels for RAG neighbors and run trace. Com
 |---|------|-------|
 | 1 | Platform hub | `/` |
 | 2 | AUTO_TAG + vendor rule | Review queue → **Slack** |
-| 3 | Receipt gate | **AWS $99** preset → receipt → reprocess |
+| 3 | Receipt gate | **AWS $99** preset → receipt → **Reprocess** (modal opens) |
 | 4 | **Learning loop** | **Option D** (Zephyr → override → replay) |
 | 5 | REFUSE | Switch to **tenant-b**, ingest **Unknown Courier 42** |
 | 6 | Orchestrator | `/orchestrator` |
 | 7 | AP | `/ap` → recommendation + duplicate |
-| 8 | Audit | Transaction detail → **Run trace** / **Live pipeline trace** |
+| 8 | Audit | Transaction detail → **Run history** (expand run) + **Pipeline steps** modal |
 
 ---
 
@@ -97,12 +97,13 @@ Open **Review queue** — use detail panels for RAG neighbors and run trace. Com
 **Time:** ~1 minute · **Requires:** `AGENTIC_EVIDENCE_ENABLED=true` (Vercel preview on `develop`, or local `.env`)
 
 1. Open **tenant-a** → find an **AWS** or **Slack** transaction (vendor rule exists).
-2. Click **Reprocess** (or upload receipt → reprocess on AWS).
-3. Watch **Live pipeline trace** on the detail page:
+2. Scroll to **Receipt** → click **Reprocess only** (or upload receipt → reprocess on AWS).
+3. **Pipeline trace modal** opens — watch steps stream (or replay when complete):
    - **Evidence plan** — tools selected (`vendor_rules`, optional `policy_context`)
    - **RAG retrieval skipped** — `vendor_rule_sufficient` when rule + known vendor
    - **Evidence verify** — heuristic concerns (if any)
-4. Compare with **Zephyr** (cold start) — planner should include `similar_transactions`.
+4. Close modal → **Run history** on detail shows the same run with domain events.
+5. Compare with **Zephyr** (cold start) — planner should include `similar_transactions`.
 
 **Say:** “The planner decides which evidence to gather — we skip expensive retrieval when the vendor rule is enough. Tri-state gates and CoA checks are unchanged.”
 

@@ -38,13 +38,13 @@ Script: [`docs/demo-script.md`](../demo-script.md)
 |---|------------|-------|----------------|
 | 1 | Platform hub | `/` | Tenant metrics, module cards |
 | 2 | AUTO_TAG + rule | Review queue → **Slack** (tenant-a) | Decision badge, **Label memory (RAG)** neighbors |
-| 3 | Receipt gate | **AWS** txn | `QUEUE_REVIEW` until receipt; upload → reprocess |
+| 3 | Receipt gate | **AWS** txn | `QUEUE_REVIEW` until receipt; upload → reprocess (**modal** trace) |
 | 4 | Learning loop | **Option D** in [`demo-script.md`](../demo-script.md#option-d--vendor-rule-learning-ui--skill-reuse) — Zephyr override → GL 6200 → replay → AUTO_TAG |
 | 5 | REFUSE | tenant-b · **Unknown Courier 42** | `REFUSE` — never silent wrong GL |
 | 6 | Orchestrator | `/orchestrator` | LangGraph topology |
 | 7 | AP | `/ap` → Staples invoice | Recommendation + duplicate on replay |
-| 8 | Audit | Transaction detail · **Run trace** | `run_id`, graph steps, token/cost if live |
-| 8b | Agentic evidence (preview) | Reprocess **AWS** with flag on | Live trace: **Evidence plan** → skipped RAG → verifier |
+| 8 | Audit | Transaction detail | **Run history** + **Pipeline steps** modal; token/cost if live |
+| 8b | Agentic evidence (preview) | Reprocess **AWS** with flag on | Modal: evidence plan → skipped RAG → verifier |
 | 9 | Agent-native | (optional) `pnpm mcp` | `ingest_transaction`, `get_review_queue` |
 
 **Tenant switch:** changing tenant on a txn detail URL redirects to queue — by design.

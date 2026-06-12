@@ -14,12 +14,19 @@ const steps: Array<{ name: string; command: string; env?: Record<string, string>
   {
     name: "tagging eval",
     command: "pnpm eval:tagging",
-    env: { LLM_ENABLE_LIVE_CALLS: "false" },
+    env: {
+      LLM_ENABLE_LIVE_CALLS: "false",
+      // Match develop baseline (eval/baseline/tagging-baseline.json).
+      AGENTIC_EVIDENCE_ENABLED: "true",
+    },
   },
   {
     name: "eval gate",
     command: "pnpm eval:gate",
-    env: { LLM_ENABLE_LIVE_CALLS: "false" },
+    env: {
+      LLM_ENABLE_LIVE_CALLS: "false",
+      AGENTIC_EVIDENCE_ENABLED: "true",
+    },
   },
   { name: "sync eval-results.md", command: "tsx scripts/update-eval-results-doc.ts" },
   { name: "production build", command: "pnpm build" },
@@ -51,6 +58,7 @@ async function main(): Promise<void> {
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`\n✅ Showcase prep passed (${elapsed}s)`);
   console.log("\nNext steps:");
+  console.log("  0. docker compose up -d && pnpm db:seed   (if eval gate fails — fresh seed)");
   console.log("  1. docs/capstone/showcase-checklist.md — rehearsal script");
   console.log("  2. pnpm demo                  — CLI E2E (needs Postgres)");
   console.log("  3. pnpm dev                   — UI walkthrough");
