@@ -30,10 +30,15 @@ export function createDb(connectionString?: string) {
   }
 
   const isServerless = Boolean(process.env.VERCEL);
+  const isPoolerUrl = url.includes("-pooler.") || url.includes("pgbouncer=true");
   const client = postgres(url, {
     max: isServerless ? 1 : 10,
-    // Required when using Neon/Vercel pooler (PgBouncer transaction mode).
-    prepare: isServerless ? false : undefined,
+    // Required for Neon/Vercel pooler (PgBouncer transaction mode).
+    prepare: isServerless || isPoolerUrl ? false : undefined,
+    // Rotate connections before serverless poolers drop long-lived handles (eval, seed).
+    idle_timeout: isPoolerUrl ? 20 : undefined,
+    max_lifetime: isPoolerUrl ? 60 * 5 : undefined,
+    connect_timeout: 30,
   });
   managedClients.push(client);
   return drizzle(client, { schema });

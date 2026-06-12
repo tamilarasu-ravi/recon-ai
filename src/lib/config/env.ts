@@ -126,7 +126,9 @@ function alignModelsForProvider(env: AppEnv): AppEnv {
         env.EMBEDDING_MODEL === "text-embedding-004"
           ? "text-embedding-3-small"
           : env.EMBEDDING_MODEL,
-      EMBEDDING_DIMENSIONS: env.EMBEDDING_DIMENSIONS === 768 ? 1536 : env.EMBEDDING_DIMENSIONS,
+      // pgvector column is vector(768); text-embedding-3-small accepts dimensions=768 via API.
+      EMBEDDING_DIMENSIONS:
+        env.EMBEDDING_DIMENSIONS === 1536 ? 768 : env.EMBEDDING_DIMENSIONS,
     };
   }
 

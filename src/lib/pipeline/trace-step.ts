@@ -13,6 +13,8 @@ export type PipelineTracePhase =
   | "rag"
   | "llm"
   | "confidence"
+  | "verifier"
+  | "planner"
   | "decision"
   | "persist";
 

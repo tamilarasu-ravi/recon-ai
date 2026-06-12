@@ -9,6 +9,11 @@ import {
 } from "@/lib/agents/tagging/embed-transaction";
 import { lookupVendorRule } from "@/lib/agents/tagging/rule-lookup";
 import { resolveRetrievalPolicy } from "@/lib/agents/tagging/evidence-policy";
+import {
+  applyVerifierToGate,
+  verifyEvidence,
+  type VerifierResult,
+} from "@/lib/agents/tagging/evidence-verifier";
 import { buildRetrievalNeighborAuditRows } from "@/lib/agents/tagging/retrieval-audit";
 import { countLabeledTransactions, retrieveSimilarTransactions } from "@/lib/agents/tagging/retrieval";
 import { suggestTagging } from "@/lib/agents/tagging/suggest";
@@ -440,18 +445,66 @@ export async function runTaggingAgent(
     supportCount,
     hasMinHistory: tenantHasMinHistory,
   });
+
+  const retrievalSkipped = !retrievalPolicy.shouldRetrieve;
+  let finalConfidence = confidenceResult.confidence;
+  let verifierResult: VerifierResult = {
+    confidenceAdjustment: 0,
+    forceReview: false,
+    concerns: [],
+  };
+
+  if (env.AGENTIC_EVIDENCE_ENABLED) {
+    verifierResult = verifyEvidence({
+      ruleHit,
+      ruleGlAccountId: ruleGlAccountId ?? null,
+      llmSuggestedGl: suggestResult.suggestion?.gl_account_id ?? null,
+      retrievalSkipped,
+      isNewVendor: vendorResult.isNewVendor,
+      neighborCount: neighbors.length,
+      supportCount,
+      confidence: confidenceResult.confidence,
+      env,
+    });
+    await traceEmit(
+      "evidence-verify",
+      "verifier",
+      "Evidence verification",
+      "complete",
+      {
+        concerns: verifierResult.concerns,
+        force_review: verifierResult.forceReview,
+        confidence_adjustment: verifierResult.confidenceAdjustment,
+        reason: verifierResult.reason,
+      },
+      Date.now() - confidenceStarted,
+      "Heuristic checks before tri-state gate.",
+    );
+  }
+
   steps.push({
     name: "confidence_gate",
     status: "ok",
     latency_ms: Date.now() - confidenceStarted,
-    detail: confidenceResult.breakdown,
+    detail: {
+      ...confidenceResult.breakdown,
+      ...(env.AGENTIC_EVIDENCE_ENABLED
+        ? {
+            verifier_concerns: verifierResult.concerns,
+            verifier_force_review: verifierResult.forceReview,
+          }
+        : {}),
+    },
   });
   await traceEmit(
     "confidence-gate",
     "confidence",
     "Confidence scoring",
     "complete",
-    confidenceResult.breakdown as Record<string, unknown>,
+    {
+      ...(confidenceResult.breakdown as Record<string, unknown>),
+      confidence_before_verifier: confidenceResult.confidence,
+    },
     Date.now() - confidenceStarted,
     "Deterministic score from rules, retrieval agreement, and history.",
   );
@@ -459,8 +512,15 @@ export async function runTaggingAgent(
   const glInCoa = suggestedGl ? isGlInCoaAllowList(suggestedGl, coaSet) : false;
   const suggestedGlCode = suggestedGl ? coaRows.find((row) => row.id === suggestedGl)?.glCode : undefined;
 
+  const adjustedConfidence = env.AGENTIC_EVIDENCE_ENABLED
+    ? Math.max(
+        0,
+        Math.min(1, confidenceResult.confidence + verifierResult.confidenceAdjustment),
+      )
+    : confidenceResult.confidence;
+
   let gateResult = applyTriStateGate({
-    confidence: confidenceResult.confidence,
+    confidence: adjustedConfidence,
     ruleHit,
     supportCount,
     top1Sim,
@@ -473,6 +533,19 @@ export async function runTaggingAgent(
     unknownVendorSignal: hasUnknownVendorSignal(input.vendorRaw),
     env,
   });
+
+  if (env.AGENTIC_EVIDENCE_ENABLED) {
+    const applied = applyVerifierToGate(
+      adjustedConfidence,
+      gateResult.decision,
+      gateResult.reason,
+      verifierResult,
+    );
+    gateResult = { decision: applied.decision, reason: applied.reason };
+    finalConfidence = applied.confidence;
+  } else {
+    finalConfidence = confidenceResult.confidence;
+  }
 
   if (parseFailed && suggestResult.errorMessage?.includes("no longer available")) {
     gateResult = { decision: "QUEUE_REVIEW", reason: "llm_unavailable" };
@@ -507,7 +580,7 @@ export async function runTaggingAgent(
     {
       decision: gateResult.decision,
       reason: gateResult.reason,
-      confidence: confidenceResult.confidence,
+      confidence: finalConfidence,
     },
     undefined,
     "AUTO_TAG, QUEUE_REVIEW, or REFUSE based on confidence, policy, and safety gates.",
@@ -518,7 +591,7 @@ export async function runTaggingAgent(
     .set({
       suggestedGlAccountId: suggestedGl,
       taggingDecision: gateResult.decision,
-      confidence: String(confidenceResult.confidence),
+      confidence: String(finalConfidence),
       taxCode: suggestResult.suggestion?.tax_code ?? ruleTaxCode ?? undefined,
       dimensions: suggestResult.suggestion?.dimensions,
       updatedAt: new Date(),
@@ -527,7 +600,7 @@ export async function runTaggingAgent(
 
   return {
     decision: gateResult.decision,
-    confidence: confidenceResult.confidence,
+    confidence: finalConfidence,
     suggestedGlAccountId: suggestedGl,
     reason: gateResult.reason,
     vendorId: vendorResult.vendorId,

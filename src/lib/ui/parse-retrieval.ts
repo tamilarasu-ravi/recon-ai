@@ -68,6 +68,33 @@ export function parseRetrievalFromObservability(
   };
 }
 
+/**
+ * Returns true when the tagging audit shows retrieval was skipped (agentic evidence path).
+ *
+ * @param observability - Raw audit_log.observability JSON.
+ * @returns Whether the retrieval step was skipped with a skip_reason.
+ */
+export function wasRetrievalSkippedInObservability(observability: unknown): boolean {
+  if (!observability || typeof observability !== "object") {
+    return false;
+  }
+
+  const steps = (observability as { steps?: unknown }).steps;
+  if (!Array.isArray(steps)) {
+    return false;
+  }
+
+  const retrievalStep = steps.find(
+    (step): step is StepSpan =>
+      typeof step === "object" &&
+      step !== null &&
+      "name" in step &&
+      (step as StepSpan).name === "retrieval",
+  );
+
+  return retrievalStep?.status === "skipped";
+}
+
 function parseNeighborRow(row: unknown): ParsedRetrievalNeighbor | null {
   if (!row || typeof row !== "object") {
     return null;

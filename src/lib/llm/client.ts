@@ -114,12 +114,17 @@ export function createLlmClient(env: AppEnv) {
       const response = await openaiClient.embeddings.create({
         model: env.EMBEDDING_MODEL,
         input: text,
+        // text-embedding-3-* supports Matryoshka dimensions (768 matches pgvector schema).
+        dimensions: env.EMBEDDING_DIMENSIONS,
       });
       const vector = response.data[0]?.embedding;
       if (!vector?.length) {
         throw new LlmUnavailableError("OpenAI embedding returned empty vector");
       }
-      return vector;
+      if (vector.length === env.EMBEDDING_DIMENSIONS) {
+        return vector;
+      }
+      return truncateAndNormalizeEmbedding(vector, env.EMBEDDING_DIMENSIONS);
     }
 
     throw new LlmUnavailableError(`Embeddings not supported for provider: ${env.LLM_PROVIDER}`);

@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { and, desc, eq, like, not } from "drizzle-orm";
 import { loadEnv } from "@/lib/config/env";
-import { getDb, getRootDb } from "@/lib/db/client";
+import { closeDb, getDb, getRootDb } from "@/lib/db/client";
 import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
+import { closeOrchestratorCheckpointer } from "@/lib/orchestrator/langgraph/checkpointer";
 import { closeCliResources, runCliScript } from "./lib/close-cli-resources.js";
 import type { DbClient } from "@/lib/db/client";
 import { auditLog, chartOfAccounts, tenants, transactions, vendorRules, vendors } from "@/lib/db/schema";
@@ -19,7 +20,7 @@ import {
 import { parseLlmUsageFromObservability } from "@/lib/observability/llm-cost";
 import { runTaggingPipeline } from "@/lib/orchestrator/run-pipeline";
 import type { TaggingDecision } from "@/lib/orchestrator/gates";
-import { parseRetrievalFromObservability } from "@/lib/ui/parse-retrieval";
+import { parseRetrievalFromObservability, wasRetrievalSkippedInObservability } from "@/lib/ui/parse-retrieval";
 
 loadDotenv({ path: ".env.local" });
 loadDotenv({ path: ".env" });
@@ -42,6 +43,10 @@ interface EvalCase {
   expect_retrieval_recall?: boolean;
   /** Human-readable failure mode this case guards against (Phase 6 eval plan). */
   failure_mode?: string;
+  /** When set with agentic flag on, assert retrieval skip status. */
+  expect_retrieval_skipped?: boolean;
+  /** Agentic-only assertions skipped when AGENTIC_EVIDENCE_ENABLED=false. */
+  requires_agentic_flag?: boolean;
 }
 
 interface EvalCaseResult {
@@ -52,6 +57,8 @@ interface EvalCaseResult {
   expected_gl_code?: string;
   actual_gl_code?: string;
   notes?: string;
+  retrieval_skipped?: boolean;
+  agentic_assertion_passed?: boolean;
 }
 
 /**
@@ -123,6 +130,152 @@ function loadEvalCases(filePath: string): EvalCase[] {
   return lines.map((line) => JSON.parse(line) as EvalCase);
 }
 
+const EVAL_DB_MAX_ATTEMPTS = 3;
+const EVAL_DB_RETRY_DELAY_MS = 2_000;
+
+/**
+ * Returns true when a postgres.js error is likely recoverable with reconnect.
+ *
+ * @param error - Caught error from pipeline or query.
+ * @returns Whether to retry after resetting the client pool.
+ */
+function isTransientPostgresError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = (error as { code?: string }).code;
+  return (
+    code === "CONNECTION_CLOSED" ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "57P01"
+  );
+}
+
+/**
+ * Closes pooled postgres and LangGraph checkpointer handles between eval retries.
+ *
+ * @returns Promise that resolves when pools are drained.
+ */
+async function resetEvalDbConnections(): Promise<void> {
+  await closeDb();
+  await closeOrchestratorCheckpointer();
+}
+
+/**
+ * Waits for a fixed interval before retrying a failed eval case.
+ *
+ * @param ms - Delay in milliseconds.
+ * @returns Promise that resolves after the delay.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Runs one eval case body with reconnect retries on Neon pooler drops.
+ *
+ * @param caseId - Eval case id for log context.
+ * @param fn - Case work to execute.
+ * @returns Result of the case callback.
+ * @throws Rethrows non-transient errors or after max attempts.
+ */
+async function withEvalDbRetry<T>(caseId: string, fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= EVAL_DB_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientPostgresError(error) || attempt >= EVAL_DB_MAX_ATTEMPTS) {
+        throw error;
+      }
+
+      const code = (error as { code?: string }).code ?? "unknown";
+      console.warn(
+        `\n  ${caseId}: DB connection lost (${code}) — retry ${attempt + 1}/${EVAL_DB_MAX_ATTEMPTS}…`,
+      );
+      await resetEvalDbConnections();
+      getRootDb();
+      await sleep(EVAL_DB_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * Reads tri-state reason from tagging audit observability steps.
+ *
+ * @param observability - Raw audit_log.observability JSON.
+ * @returns Decision reason code or undefined.
+ */
+function getDecisionReasonFromObservability(observability: unknown): string | undefined {
+  if (!observability || typeof observability !== "object") {
+    return undefined;
+  }
+
+  const steps = (observability as { steps?: unknown }).steps;
+  if (!Array.isArray(steps)) {
+    return undefined;
+  }
+
+  for (const step of steps) {
+    if (
+      typeof step === "object" &&
+      step !== null &&
+      "name" in step &&
+      (step as { name: string }).name === "tri_state_decision" &&
+      "detail" in step &&
+      typeof (step as { detail?: unknown }).detail === "object" &&
+      (step as { detail: { reason?: unknown } }).detail !== null
+    ) {
+      const reason = (step as { detail: { reason?: unknown } }).detail.reason;
+      return typeof reason === "string" ? reason : undefined;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Loads tagging audit observability for a pipeline run, falling back to the latest audit for the transaction.
+ *
+ * @param db - Database client.
+ * @param runId - Orchestrator run id from pipeline result.
+ * @param transactionId - Transaction UUID.
+ * @returns Observability JSON or undefined when no tagging audit exists.
+ */
+async function loadTaggingObservability(
+  db: DbClient,
+  runId: string,
+  transactionId: string,
+): Promise<unknown | undefined> {
+  const [byRun] = await db
+    .select({ observability: auditLog.observability })
+    .from(auditLog)
+    .where(and(eq(auditLog.runId, runId), eq(auditLog.agent, "tagging")))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(1);
+
+  if (byRun?.observability) {
+    return byRun.observability;
+  }
+
+  const [byTransaction] = await db
+    .select({ observability: auditLog.observability })
+    .from(auditLog)
+    .where(and(eq(auditLog.transactionId, transactionId), eq(auditLog.agent, "tagging")))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(1);
+
+  return byTransaction?.observability;
+}
+
 /**
  * Runs tagging eval harness and writes results artifact.
  *
@@ -141,7 +294,11 @@ async function main(): Promise<void> {
   let totalCostUsd = 0;
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
+  let retrievalSkippedCount = 0;
+  let verifierForceReviewCount = 0;
+  let agenticAssertionFailures: string[] = [];
 
+  // Commit cleanup in its own transaction so tenant-scoped eval runs see deleted rows.
   await runWithRlsBypass(async () => {
     const db = getDb();
     const removed = await cleanupEvalTransactions(db);
@@ -152,6 +309,10 @@ async function main(): Promise<void> {
     if (rulesRemoved > 0) {
       console.log(`Cleared ${rulesRemoved} demo-learned vendor rule(s) for reproducible eval`);
     }
+  });
+
+  await runWithRlsBypass(async () => {
+    const db = getDb();
 
     const tenantRows = await db.select().from(tenants);
     const tenantBySlug = new Map(tenantRows.map((row) => [row.slug, row.id]));
@@ -159,8 +320,13 @@ async function main(): Promise<void> {
     const coaRows = await db.select().from(chartOfAccounts);
 
     console.log(
-      `Running ${cases.length} eval case(s) (live LLM=${env.LLM_ENABLE_LIVE_CALLS}) — this may take a few minutes…`,
+      `Running ${cases.length} eval case(s) (live LLM=${env.LLM_ENABLE_LIVE_CALLS}, agentic=${env.AGENTIC_EVIDENCE_ENABLED}) — this may take a few minutes…`,
     );
+    if (process.env.DATABASE_URL?.includes("-pooler.")) {
+      console.log(
+        "Neon pooler detected — transient CONNECTION_CLOSED errors will retry up to 3× per case.",
+      );
+    }
 
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex += 1) {
       const evalCase = cases[caseIndex]!;
@@ -175,7 +341,8 @@ async function main(): Promise<void> {
         `  [${caseIndex + 1}/${cases.length}] ${evalCase.id} … `,
       );
 
-      await runWithTenantRls(tenantId, async () => {
+      await withEvalDbRetry(evalCase.id, async () =>
+        runWithTenantRls(tenantId, async () => {
         const scopedDb = getDb();
         const pipelineResult = await runTaggingPipeline(
           scopedDb,
@@ -198,10 +365,47 @@ async function main(): Promise<void> {
           actualGlCode = coaRow?.glCode;
         }
 
+        const observability = await loadTaggingObservability(
+          scopedDb,
+          pipelineResult.runId,
+          pipelineResult.transactionId,
+        );
+
         const decisionPass = actualDecision === evalCase.expected_decision;
         const glPass =
           evalCase.expected_gl_code === undefined || actualGlCode === evalCase.expected_gl_code;
-        const passed = decisionPass && glPass;
+
+        const retrievalSkipped = observability
+          ? wasRetrievalSkippedInObservability(observability)
+          : false;
+
+        if (retrievalSkipped) {
+          retrievalSkippedCount += 1;
+        }
+
+        if (
+          actualDecision === "QUEUE_REVIEW" &&
+          observability &&
+          getDecisionReasonFromObservability(observability)?.startsWith("verifier_")
+        ) {
+          verifierForceReviewCount += 1;
+        }
+
+        let agenticAssertionPassed = true;
+        if (
+          env.AGENTIC_EVIDENCE_ENABLED &&
+          evalCase.requires_agentic_flag &&
+          evalCase.expect_retrieval_skipped !== undefined
+        ) {
+          agenticAssertionPassed = retrievalSkipped === evalCase.expect_retrieval_skipped;
+          if (!agenticAssertionPassed) {
+            agenticAssertionFailures.push(
+              `${evalCase.id}: expected retrieval_skipped=${evalCase.expect_retrieval_skipped}, got ${retrievalSkipped} (pipeline=${pipelineResult.status})`,
+            );
+          }
+        }
+
+        const passed = decisionPass && glPass && agenticAssertionPassed;
 
         if (evalCase.expected_decision === "AUTO_TAG") {
           autoTagTotal += 1;
@@ -214,26 +418,19 @@ async function main(): Promise<void> {
           llmCallsSavedByRules += 1;
         }
 
-        const [taggingAudit] = await scopedDb
-          .select({ observability: auditLog.observability })
-          .from(auditLog)
-          .where(and(eq(auditLog.runId, pipelineResult.runId), eq(auditLog.agent, "tagging")))
-          .orderBy(desc(auditLog.createdAt))
-          .limit(1);
-
-        if (taggingAudit?.observability && typeof taggingAudit.observability === "object") {
+        if (observability && typeof observability === "object") {
           const usage = parseLlmUsageFromObservability(
-            taggingAudit.observability as Record<string, unknown>,
+            observability as Record<string, unknown>,
           );
           totalCostUsd += usage.costUsd;
           totalPromptTokens += usage.promptTokens;
           totalCompletionTokens += usage.completionTokens;
         }
 
-        const recallEligible = isRetrievalRecallEligible(evalCase);
+        const recallEligible = isRetrievalRecallEligible(evalCase) && !retrievalSkipped;
         let neighborGlCodes: string[] = [];
-        if (taggingAudit?.observability) {
-          const parsed = parseRetrievalFromObservability(taggingAudit.observability);
+        if (observability) {
+          const parsed = parseRetrievalFromObservability(observability);
           neighborGlCodes =
             parsed?.neighbors
               .map((neighbor) => neighbor.glCode)
@@ -245,7 +442,7 @@ async function main(): Promise<void> {
           eligible: recallEligible,
           hit:
             recallEligible && evalCase.expected_gl_code
-              ? didRetrievalRecallHit(taggingAudit?.observability, evalCase.expected_gl_code)
+              ? didRetrievalRecallHit(observability, evalCase.expected_gl_code)
               : null,
           expected_gl_code: evalCase.expected_gl_code,
           neighbor_gl_codes: neighborGlCodes,
@@ -259,13 +456,20 @@ async function main(): Promise<void> {
           expected_gl_code: evalCase.expected_gl_code,
           actual_gl_code: actualGlCode,
           notes: evalCase.notes,
+          retrieval_skipped: retrievalSkipped,
+          agentic_assertion_passed: agenticAssertionPassed,
         });
 
         const status = passed ? "pass" : "FAIL";
+        const agenticHint =
+          !agenticAssertionPassed && evalCase.requires_agentic_flag
+            ? `, retrieval_skipped=${retrievalSkipped}, pipeline=${pipelineResult.status}`
+            : "";
         console.log(
-          `${actualDecision}${actualGlCode ? ` → ${actualGlCode}` : ""} (${status}, expected ${evalCase.expected_decision})`,
+          `${actualDecision}${actualGlCode ? ` → ${actualGlCode}` : ""} (${status}, expected ${evalCase.expected_decision}${agenticHint})`,
         );
-      });
+        }),
+      );
     }
   });
 
@@ -297,6 +501,11 @@ async function main(): Promise<void> {
     total_completion_tokens: totalCompletionTokens,
     total_tokens: totalPromptTokens + totalCompletionTokens,
     llm_enable_live_calls: env.LLM_ENABLE_LIVE_CALLS,
+    agentic_evidence_enabled: env.AGENTIC_EVIDENCE_ENABLED,
+    retrieval_skipped_count: retrievalSkippedCount,
+    retrieval_skipped_rate: Number((retrievalSkippedCount / cases.length).toFixed(4)),
+    verifier_force_review_count: verifierForceReviewCount,
+    agentic_assertion_failures: agenticAssertionFailures,
     threshold_auto: env.TAG_AUTO_THRESHOLD,
     failures: results.filter((row) => !row.passed),
     results,
@@ -314,6 +523,12 @@ async function main(): Promise<void> {
   console.log(
     `  retrieval_recall@5: ${(summary.retrieval_recall_at_5 * 100).toFixed(1)}% (${retrievalRecallHitCount}/${retrievalRecallEligibleCount} eligible)`,
   );
+  if (env.AGENTIC_EVIDENCE_ENABLED) {
+    console.log(
+      `  retrieval_skipped: ${summary.retrieval_skipped_count}/${summary.case_count} (${(summary.retrieval_skipped_rate * 100).toFixed(1)}%)`,
+    );
+    console.log(`  verifier_force_review: ${summary.verifier_force_review_count}`);
+  }
   console.log(`  total_cost_usd: ${summary.total_cost_usd}`);
   console.log(`  total_tokens: ${summary.total_tokens}`);
   console.log(`  results: ${RESULTS_FILE}`);
@@ -327,6 +542,15 @@ async function main(): Promise<void> {
 
   if (summary.auto_tag_precision < 0.95 && env.LLM_ENABLE_LIVE_CALLS) {
     console.warn("Warning: auto-tag precision below 95% target");
+  }
+
+  if (agenticAssertionFailures.length > 0) {
+    console.error("Agentic eval assertions failed:");
+    for (const failure of agenticAssertionFailures) {
+      console.error(`  ${failure}`);
+    }
+    await closeCliResources();
+    process.exit(1);
   }
 
   if (passRate < 0.7) {
