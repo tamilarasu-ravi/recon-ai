@@ -6,12 +6,13 @@
 | ----------------- | ----------------------------------------------------------------------------- |
 | **Version**       | **Phase 1** — operator product (v0.1)                                         |
 | **Status**        | Shipped — see [product roadmap](./docs/product-roadmap.md)                    |
+| **Live demo**     | [recon-ai-ivory.vercel.app](https://recon-ai-ivory.vercel.app/)               |
 | **Strategy**      | [STRATEGY.md](./STRATEGY.md)                                                  |
 | **System design** | [docs/architecture.md](./docs/architecture.md)                                |
 
 **Not a chatbot.** Tri-state autonomy (`AUTO_TAG` · `QUEUE_REVIEW` · `REFUSE`), rule-first cost control, full audit trails, MCP/API parity with the UI.
 
-**Quick links:** [Product roadmap](./docs/product-roadmap.md) · [Architecture](./docs/architecture.md) · [Orchestrator walkthrough](./docs/guides/orchestrator-walkthrough.md) · [Webhook ingest](./docs/webhook-ingest.md) · [Orchestrator](#orchestrator-explicit) · [Bootstrap](#bootstrap) · [MCP](./docs/mcp-setup.md) · [Hero spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Production at scale](./docs/production-at-scale.md) · [Capstone artifacts](./docs/capstone/README.md) (academic origin)
+**Quick links:** [Live demo](https://recon-ai-ivory.vercel.app/) · [Product roadmap](./docs/product-roadmap.md) · [Architecture](./docs/architecture.md) · [Orchestrator walkthrough](./docs/guides/orchestrator-walkthrough.md) · [Webhook ingest](./docs/webhook-ingest.md) · [Orchestrator](#orchestrator-explicit) · [Bootstrap](#bootstrap) · [MCP](./docs/mcp-setup.md) · [Hero spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Production at scale](./docs/production-at-scale.md) · [Capstone artifacts](./docs/capstone/README.md) (academic origin)
 
 **Source brief:** _CFO Agent_ workflows 1–3 — implemented as **one platform** with production depth on tagging and gated stages on policy/AP.
 
@@ -370,7 +371,7 @@ One repo, one database, minimal framework overhead. Prefer **boring, inspectable
 | **CLI / seeds**       | `tsx` scripts in `scripts/`                                          | Seed tenants, replay txn, run eval harness                    |
 | **Observability**     | [Langfuse](https://langfuse.com/) (optional) + audit step traces       | Trace prompts, confidence, retrieval hits per txn             |
 | **Local dev**         | Docker Compose (Postgres + pgvector on host port **5434**)           | Reproducible DB for local dev and demos                       |
-| **Deploy**            | Vercel + [Neon](https://neon.tech/) Postgres (optional)              | See [docs/vercel-deploy.md](./docs/vercel-deploy.md)          |
+| **Deploy**            | [Vercel](https://recon-ai-ivory.vercel.app/) + [Neon](https://neon.tech/) Postgres (optional) | See [docs/vercel-deploy.md](./docs/vercel-deploy.md)          |
 
 ### Explicit non-choices
 
