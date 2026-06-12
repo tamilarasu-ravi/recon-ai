@@ -36,7 +36,7 @@ node --import tsx --test tests/integration/tenant-rls.test.ts   # needs DATABASE
 
 ## Operational notes
 
-- **Superusers bypass RLS** even with `FORCE ROW LEVEL SECURITY`. Local Docker uses `postgres`; migration `0007_recon_app_role` creates `recon_app` (password `recon_app_dev`), and each scoped transaction runs `SET LOCAL ROLE recon_app` unless `RLS_USE_APP_ROLE=false`.
+- **Superusers bypass RLS** even with `FORCE ROW LEVEL SECURITY`. Local Docker uses `postgres`; migration `0007_recon_app_role` creates `recon_app` (password `recon_app_dev`), and each scoped transaction runs `SET LOCAL SESSION AUTHORIZATION recon_app` when the connection is a superuser. `RLS_USE_APP_ROLE=false` skips the switch only for non-superuser URLs (Neon/Vercel).
 - Production (Neon): use a non-superuser connection string — RLS applies without `SET ROLE`.
 - Table owner / superuser bypasses RLS in Postgres; app role should not be superuser in production.
 - Connection poolers must preserve transaction-local `SET LOCAL` (Neon pooler: use transaction mode or direct connection for RLS transactions).

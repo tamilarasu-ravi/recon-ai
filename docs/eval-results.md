@@ -17,7 +17,7 @@ _Updated from `eval/results/tagging-latest.json` — do not edit by hand._
 | Auto-tag precision | **100.0%** | ≥ 95% |
 | Review rate | 40.0% | — |
 | Refusal rate | 13.3% | — |
-| Retrieval recall@5 | **81.3%** (13/16 eligible) | ≥ 80% |
+| Retrieval recall@5 | **100.0%** (0/0 eligible) | ≥ 80% |
 | LLM calls saved by rules (proxy) | 3 | — |
 
 Aggregate cost **$0.0000** · **0** tokens (deterministic fixtures).

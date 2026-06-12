@@ -5,6 +5,9 @@ import { getRootDb, runInRlsDbScope } from "@/lib/db/client";
 
 const RLS_BYPASS_SETTING = "app.rls_bypass";
 const RLS_TENANT_SETTING = "app.tenant_id";
+
+/** Cached superuser probe — local Docker postgres needs SESSION AUTHORIZATION even when RLS_USE_APP_ROLE=false. */
+let connectionIsSuperuser: boolean | undefined;
 /**
  * Sets a transaction-local GUC for the remainder of the current transaction.
  *
@@ -21,18 +24,49 @@ async function setLocalConfig(
 }
 
 /**
- * Uses recon_app when connected as postgres so FORCE RLS policies apply in dev.
+ * Returns whether this transaction should switch to recon_app before RLS-scoped work.
+ * Neon non-superuser URLs set RLS_USE_APP_ROLE=false; local Docker postgres superuser still needs the switch.
+ *
+ * @param tx - Scoped transaction client.
+ * @returns True when SESSION AUTHORIZATION should be attempted.
+ */
+async function shouldAssumeAppRole(tx: DbClient): Promise<boolean> {
+  if (process.env.RLS_USE_APP_ROLE === "true") {
+    return true;
+  }
+  if (process.env.RLS_USE_APP_ROLE !== "false") {
+    return true;
+  }
+
+  if (connectionIsSuperuser === undefined) {
+    const rows = await tx.execute<{ usesuper: boolean }>(
+      sql`SELECT usesuper FROM pg_user WHERE usename = current_user LIMIT 1`,
+    );
+    connectionIsSuperuser = Boolean(rows[0]?.usesuper);
+  }
+
+  return connectionIsSuperuser;
+}
+
+/**
+ * Uses recon_app when connected as a superuser so FORCE RLS policies apply in dev.
+ * SET LOCAL ROLE is insufficient — superusers still bypass RLS until session user changes.
  *
  * @param tx - Scoped transaction client.
  */
 async function assumeRlsEnforcedRole(tx: DbClient): Promise<void> {
-  if (process.env.RLS_USE_APP_ROLE === "false") {
+  if (!(await shouldAssumeAppRole(tx))) {
     return;
   }
+
   try {
-    await tx.execute(sql`SET LOCAL ROLE recon_app`);
+    await tx.execute(sql`SET LOCAL SESSION AUTHORIZATION recon_app`);
   } catch {
-    // Role missing (e.g. Neon app user already non-superuser) — no-op.
+    try {
+      await tx.execute(sql`SET LOCAL ROLE recon_app`);
+    } catch {
+      // Role missing (e.g. Neon app user already non-superuser) — no-op.
+    }
   }
 }
 
