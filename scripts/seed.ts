@@ -14,79 +14,17 @@ import { hasProviderApiKey, loadEnv } from "@/lib/config/env";
 import { getDb, getRootDb } from "@/lib/db/client";
 import { runWithRlsBypass } from "@/lib/db/tenant-rls";
 import { runCliScript } from "./lib/close-cli-resources.js";
+import { syncSeedVendorRulesForTenant, TENANT_SEED } from "./lib/tenant-seed-config.js";
 import {
   chartOfAccounts,
   transactions,
   vendorAliases,
-  vendorRules,
   vendors,
   tenants,
 } from "@/lib/db/schema";
 
 loadDotenv({ path: ".env.local" });
 loadDotenv({ path: ".env" });
-
-const TENANT_SEED = [
-  {
-    slug: "tenant-a",
-    name: "Acme Labs",
-    coa: [
-      { glCode: "6100", glName: "Software & Cloud" },
-      { glCode: "6200", glName: "Professional Services" },
-      { glCode: "6300", glName: "Travel & Entertainment" },
-      { glCode: "6400", glName: "Office Supplies" },
-    ],
-    vendorAliases: [
-      { alias: "aws", canonical: "aws", glCode: "6100" },
-      { alias: "amazon web services", canonical: "aws", glCode: "6100" },
-      { alias: "slack", canonical: "slack", glCode: "6100" },
-      { alias: "starbucks", canonical: "starbucks", glCode: "6300" },
-    ],
-    labeledTxns: [
-      { vendor: "aws", amount: "240.00", memo: "ec2 hosting", glCode: "6100" },
-      { vendor: "aws", amount: "89.50", memo: "s3 storage", glCode: "6100" },
-      { vendor: "slack", amount: "45.00", memo: "team plan", glCode: "6100" },
-      { vendor: "starbucks", amount: "18.20", memo: "team coffee", glCode: "6300" },
-      { vendor: "starbucks", amount: "22.10", memo: "client meeting", glCode: "6300" },
-      { vendor: "slack", amount: "120.00", memo: "annual", glCode: "6100" },
-      { vendor: "aws", amount: "310.00", memo: "rds", glCode: "6100" },
-      { vendor: "aws", amount: "55.00", memo: "lambda", glCode: "6100" },
-      { vendor: "slack", amount: "48.00", memo: "add seats", glCode: "6100" },
-      { vendor: "starbucks", amount: "15.00", memo: "snacks", glCode: "6300" },
-      { vendor: "aws", amount: "199.00", memo: "cloudfront", glCode: "6100" },
-      { vendor: "slack", amount: "52.00", memo: "pro plan", glCode: "6100" },
-    ],
-  },
-  {
-    slug: "tenant-b",
-    name: "Northwind Trading",
-    coa: [
-      { glCode: "5100", glName: "COGS — Materials" },
-      { glCode: "5200", glName: "Logistics" },
-      { glCode: "5300", glName: "Marketing" },
-      { glCode: "5400", glName: "Facilities" },
-    ],
-    vendorAliases: [
-      { alias: "fedex", canonical: "fedex", glCode: "5200" },
-      { alias: "google ads", canonical: "google ads", glCode: "5300" },
-      { alias: "staples", canonical: "staples", glCode: "5400" },
-    ],
-    labeledTxns: [
-      { vendor: "fedex", amount: "120.00", memo: "shipping", glCode: "5200" },
-      { vendor: "google ads", amount: "500.00", memo: "campaign", glCode: "5300" },
-      { vendor: "staples", amount: "45.00", memo: "supplies", glCode: "5400" },
-      { vendor: "fedex", amount: "88.00", memo: "freight", glCode: "5200" },
-      { vendor: "google ads", amount: "300.00", memo: "retargeting", glCode: "5300" },
-      { vendor: "staples", amount: "32.00", memo: "paper", glCode: "5400" },
-      { vendor: "fedex", amount: "64.00", memo: "overnight", glCode: "5200" },
-      { vendor: "google ads", amount: "250.00", memo: "search", glCode: "5300" },
-      { vendor: "staples", amount: "28.00", memo: "ink", glCode: "5400" },
-      { vendor: "fedex", amount: "95.00", memo: "logistics", glCode: "5200" },
-      { vendor: "google ads", amount: "180.00", memo: "display", glCode: "5300" },
-      { vendor: "staples", amount: "40.00", memo: "folders", glCode: "5400" },
-    ],
-  },
-] as const;
 
 /**
  * Upserts a deterministic embedding for a labeled seed transaction.
@@ -204,17 +142,11 @@ async function main(): Promise<void> {
         await db.insert(vendorAliases).values({ tenantId, vendorId, aliasRaw: vendorSeed.alias });
       }
 
-      const glId = coaByCode.get(vendorSeed.glCode);
-      if (glId) {
-        const rules = await db
-          .select()
-          .from(vendorRules)
-          .where(eq(vendorRules.tenantId, tenantId))
-          .limit(100);
-        if (!rules.some((r) => r.vendorId === vendorId)) {
-          await db.insert(vendorRules).values({ tenantId, vendorId, glAccountId: glId });
-        }
-      }
+    }
+
+    const rulesSynced = await syncSeedVendorRulesForTenant(db, tenantId, tenantSeed);
+    if (rulesSynced > 0) {
+      console.log(`  synced ${rulesSynced} vendor rule(s) for ${tenantSeed.slug}`);
     }
 
     let txnIndex = 0;

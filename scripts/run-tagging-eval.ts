@@ -8,6 +8,7 @@ import { closeDb, getDb, getRootDb } from "@/lib/db/client";
 import { runWithRlsBypass, runWithTenantRls } from "@/lib/db/tenant-rls";
 import { closeOrchestratorCheckpointer } from "@/lib/orchestrator/langgraph/checkpointer";
 import { closeCliResources, runCliScript } from "./lib/close-cli-resources.js";
+import { syncAllSeedVendorRules } from "./lib/tenant-seed-config.js";
 import type { DbClient } from "@/lib/db/client";
 import { auditLog, chartOfAccounts, tenants, transactions, vendorRules, vendors } from "@/lib/db/schema";
 import {
@@ -313,6 +314,10 @@ async function main(): Promise<void> {
     const rulesRemoved = await cleanupDemoLearnedVendorState(db);
     if (rulesRemoved > 0) {
       console.log(`Cleared ${rulesRemoved} demo-learned vendor rule(s) for reproducible eval`);
+    }
+    const rulesSynced = await syncAllSeedVendorRules(db);
+    if (rulesSynced > 0) {
+      console.log(`Restored ${rulesSynced} seeded vendor rule(s) after demo overrides`);
     }
   });
 
