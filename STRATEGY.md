@@ -77,6 +77,9 @@ This codebase began as an AI Engineering capstone and is now maintained as a pro
 
 ## v2 — Agentic evidence (`develop` branch)
 
-Post–Phase 1 work on `develop` adds **conditional retrieval, evidence planner, and verifier** behind `AGENTIC_EVIDENCE_ENABLED`. `main` holds the Phase 1 operator product baseline.
+Post–Phase 1 work on `develop` adds **conditional retrieval, evidence planner, and verifier** behind `AGENTIC_EVIDENCE_ENABLED`. Phases 0–4 are complete on `develop`; `main` holds the Phase 1 operator product baseline until post-showcase merge.
 
-**Implementation plan (source of truth):** [`planning/agentic-v2-implementation-plan.md`](./planning/agentic-v2-implementation-plan.md)
+| Doc | Purpose |
+|-----|---------|
+| [`planning/agentic-v2-implementation-plan.md`](./planning/agentic-v2-implementation-plan.md) | v2 agentic evidence — phases, flags, merge policy |
+| [`planning/post-v1-product-review.md`](./planning/post-v1-product-review.md) | Whole-project review — Tier A–D backlog, critical improvements, build order |

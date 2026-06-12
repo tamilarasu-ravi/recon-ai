@@ -16,7 +16,7 @@ export default function NewReviewQueueTransactionPage(): React.ReactElement {
   return (
     <PageLayout
       title="Add transaction"
-      subtitle="Ingest a card transaction for the selected tenant. Tagging runs through policy and may land in the review queue."
+      subtitle="Ingest a card transaction for the selected company. Use Sync mode and docs/guides/ui-testing-tri-state.md to test AUTO_TAG, QUEUE_REVIEW, and REFUSE (Acme Labs · Northwind Trading)."
       backHref="/review-queue"
       backLabel="Review queue"
       loading={tenantLoading}

@@ -1,7 +1,8 @@
 import Link from "next/link";
 
-import {PageLayout} from "@/app/components/page-layout";
-import {TenantMetricsPanel} from "@/app/components/tenant-metrics-panel";
+import { HomeCardFlowOverview } from "@/app/components/home-card-flow-overview";
+import { PageLayout } from "@/app/components/page-layout";
+import { TenantMetricsPanel } from "@/app/components/tenant-metrics-panel";
 
 /**
  * Product home hub — navigation and at-a-glance metrics for finance operators.
@@ -16,23 +17,13 @@ export default function HomePage(): React.ReactElement {
     >
       <section className="hero hero--banner">
         <span className="hero__eyebrow">CFO operations platform</span>
-        <div className="hero__pipelines">
-          <span className="hero__pipe">Auto-code spend</span>
-          <span className="hero__pipe">Policy checks</span>
-          <span className="hero__pipe">Review &amp; approve</span>
+        <h2 className="hero__headline">How card spend is processed</h2>
+        <div className="hero__pipelines" aria-label="Pipeline step labels">
+          <span className="hero__pipe">1 · Policy checks</span>
+          <span className="hero__pipe">2 · Auto-code spend</span>
+          <span className="hero__pipe">3 · Review &amp; approve</span>
         </div>
-        <p
-          style={{
-            margin: "1rem 0 0",
-            fontSize: "0.9375rem",
-            color: "var(--color-text-muted)",
-            maxWidth: "42rem",
-          }}
-        >
-          New here?{" "}
-          <Link href="/review-queue/new">Add a sample transaction</Link> to see
-          tagging and review in action.
-        </p>
+        <HomeCardFlowOverview />
       </section>
 
       <TenantMetricsPanel />

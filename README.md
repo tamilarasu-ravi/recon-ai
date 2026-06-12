@@ -12,7 +12,7 @@
 
 **Not a chatbot.** Tri-state autonomy (`AUTO_TAG` · `QUEUE_REVIEW` · `REFUSE`), rule-first cost control, full audit trails, MCP/API parity with the UI.
 
-**Quick links:** [Live demo](https://recon-ai-ivory.vercel.app/) · [Product roadmap](./docs/product-roadmap.md) · [Architecture](./docs/architecture.md) · [Orchestrator walkthrough](./docs/guides/orchestrator-walkthrough.md) · [Webhook ingest](./docs/webhook-ingest.md) · [Orchestrator](#orchestrator-explicit) · [Bootstrap](#bootstrap) · [MCP](./docs/mcp-setup.md) · [Hero spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Production at scale](./docs/production-at-scale.md) · [Capstone artifacts](./docs/capstone/README.md) (academic origin)
+**Quick links:** [Live demo](https://recon-ai-ivory.vercel.app/) · [Product roadmap](./docs/product-roadmap.md) · [Architecture](./docs/architecture.md) · [UI testing (tri-state)](./docs/guides/ui-testing-tri-state.md) · [Orchestrator walkthrough](./docs/guides/orchestrator-walkthrough.md) · [Webhook ingest](./docs/webhook-ingest.md) · [Orchestrator](#orchestrator-explicit) · [Bootstrap](#bootstrap) · [MCP](./docs/mcp-setup.md) · [Hero spec](./docs/superpowers/specs/2026-05-28-tagging-mini-product-design.md) · [Production at scale](./docs/production-at-scale.md) · [Capstone artifacts](./docs/capstone/README.md) (academic origin)
 
 **Source brief:** _CFO Agent_ workflows 1–3 — implemented as **one platform** with production depth on tagging and gated stages on policy/AP.
 

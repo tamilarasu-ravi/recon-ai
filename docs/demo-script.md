@@ -3,6 +3,8 @@
 **Prereqs:** Postgres seeded (`pnpm db:seed` locally, or seeded Neon on Vercel).  
 Use **localhost:3000** or your **public Vercel URL**. API key optional if `LLM_ENABLE_LIVE_CALLS=false`.
 
+**UI testing (all three decisions):** Step-by-step browser guide → [`docs/guides/ui-testing-tri-state.md`](./guides/ui-testing-tri-state.md)
+
 ## Option A — One command (CLI)
 
 ```bash
@@ -15,14 +17,14 @@ Walk through the nine printed steps (tagging, receipt, override, AP duplicate, *
 
 ## Option D — Vendor rule learning (UI — “skill reuse”)
 
-**Time:** ~2 minutes · **Tenant:** `tenant-a` · **Beat:** override once → system remembers → second txn auto-codes
+**Time:** ~2 minutes · **Company:** **Acme Labs** · **Beat:** override once → system remembers → second txn auto-codes
 
 This mirrors `pnpm demo` steps 4–6 and is the best UI story for *“every correction becomes a reusable rule.”*
 
 ### Before you start
 
 1. Open the app (local or Vercel).
-2. Select company **tenant-a** in the header tenant switcher.
+2. Select company **Acme Labs** in the header **Company** dropdown.
 3. Optional: run `pnpm demo` once in terminal to warm the DB — not required if you follow the steps below.
 
 ### Step 1 — First Zephyr transaction (no rule yet)
@@ -85,7 +87,7 @@ Open **Review queue** — use detail panels for RAG neighbors and run trace. Com
 | 2 | AUTO_TAG + vendor rule | Review queue → **Slack** |
 | 3 | Receipt gate | **AWS $99** preset → receipt → **Reprocess** (modal opens) |
 | 4 | **Learning loop** | **Option D** (Zephyr → override → replay) |
-| 5 | REFUSE | Switch to **tenant-b**, ingest **Unknown Courier 42** |
+| 5 | REFUSE | Switch to **Northwind Trading**, ingest **Unknown Courier 42** |
 | 6 | Orchestrator | `/orchestrator` |
 | 7 | AP | `/ap` → recommendation + duplicate |
 | 8 | Audit | Transaction detail → **Run history** (expand run) + **Pipeline steps** modal |
@@ -96,7 +98,7 @@ Open **Review queue** — use detail panels for RAG neighbors and run trace. Com
 
 **Time:** ~1 minute · **Requires:** `AGENTIC_EVIDENCE_ENABLED=true` (Vercel preview on `develop`, or local `.env`)
 
-1. Open **tenant-a** → find an **AWS** or **Slack** transaction (vendor rule exists).
+1. Open **Acme Labs** → find an **AWS** or **Slack** transaction (vendor rule exists).
 2. Scroll to **Receipt** → click **Reprocess only** (or upload receipt → reprocess on AWS).
 3. **Pipeline trace modal** opens — watch steps stream (or replay when complete):
    - **Evidence plan** — tools selected (`vendor_rules`, optional `policy_context`)
@@ -108,6 +110,30 @@ Open **Review queue** — use detail panels for RAG neighbors and run trace. Com
 **Say:** “The planner decides which evidence to gather — we skip expensive retrieval when the vendor rule is enough. Tri-state gates and CoA checks are unchanged.”
 
 **Eval proof:** `pnpm eval:tagging` with flag on → ~60% retrieval skipped, 30/30 pass (see `docs/eval-results.md`).
+
+---
+
+## Option F — Tri-state UI walkthrough (AUTO_TAG · QUEUE_REVIEW · REFUSE)
+
+**Time:** ~5 minutes · **Full guide:** [`docs/guides/ui-testing-tri-state.md`](./guides/ui-testing-tri-state.md)
+
+One page, three scenarios — same path every time: **Review queue → Add transaction** (`/review-queue/new`) → **Sync** ingest → open transaction → **Run history → Pipeline steps** (or **Reprocess only**).
+
+| # | Decision | Company | Vendor | Amount | Memo |
+|---|----------|---------|--------|--------|------|
+| 1 | **AUTO_TAG** | Acme Labs | `slack` | 45.00 | team plan |
+| 2 | **QUEUE_REVIEW** | Acme Labs | `Zephyr Labs LLC` (custom) | 1200.00 | consulting |
+| 3 | **REFUSE** | Northwind Trading | `Unknown Courier 42` (custom) | 60.00 | — |
+
+**Env for full trace:** `AGENTIC_EVIDENCE_ENABLED=true` + `LLM_ENABLE_LIVE_CALLS=true` + API key.
+
+**Scenario 2 trace checks:** Evidence plan → RAG neighbors → LLM step **without** “LLM skipped” → tokens/model/cost → **Needs review**.
+
+**Scenario 1 trace checks:** RAG **skipped** · LLM **skipped** (vendor rule) → **Auto-coded**.
+
+**Scenario 3:** **Unclassified** — refuse to guess GL.
+
+See the guide for presets, troubleshooting (Zephyr rule drift), and modal step names.
 
 ---
 

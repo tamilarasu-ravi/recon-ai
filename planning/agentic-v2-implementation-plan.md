@@ -2,10 +2,11 @@
 
 | Field | Value |
 |-------|--------|
-| **Status** | Approved for `develop` branch |
-| **Branch policy** | `main` frozen for Jun 14 capstone showcase; all v2 work on `develop` |
+| **Status** | Phases 0–4 **complete** on `develop`; showcase freeze |
+| **Branch policy** | `main` frozen for Jun 14 capstone showcase; v2 demo from `develop` preview |
 | **Author / audience** | Implementation + interview narrative |
-| **Last updated** | 2026-06-09 |
+| **Last updated** | 2026-06-02 |
+| **Post-v1 roadmap** | [`post-v1-product-review.md`](./post-v1-product-review.md) — tiers, gaps, build order |
 
 ---
 
@@ -721,14 +722,46 @@ flowchart TB
 
 ## 15. Next action
 
-**Start Phase 0 + Phase 1** on `develop`:
+### 15.1 Showcase freeze (current — no new v2 features)
 
-1. Add `AGENTIC_EVIDENCE_ENABLED` flag
-2. Implement `evidence-policy.ts` + unit tests
-3. Wire conditional retrieval in `run-tagging-agent.ts`
-4. Run `pnpm test` + `pnpm eval:tagging`
-5. Commit: `feat(agentic): conditional retrieval behind AGENTIC_EVIDENCE_ENABLED`
+Phases 0–4 are done. Before Jun 14:
+
+1. `pnpm showcase:prep` green (`AGENTIC_EVIDENCE_ENABLED=true`, `LLM_ENABLE_LIVE_CALLS=false`)
+2. Dry-run [`docs/demo-script.md`](../docs/demo-script.md) Options B + D + E on Vercel `develop` preview
+3. Record backup demo video
+
+Eval drift from demo overrides is handled by `scripts/lib/tenant-seed-config.ts` (restores seed vendor rules before eval).
+
+### 15.2 Post-showcase (v2 + whole-project)
+
+See **[`post-v1-product-review.md`](./post-v1-product-review.md)** for:
+
+- Maturity assessment and critical improvements (integration tests, CI, docs)
+- **Tier A–D** feature backlog (card↔invoice, month-close, async reprocess SSE, merge policy, etc.)
+- 8–12 week recommended build order
+- Scope traps (what not to build)
+
+**v2-specific post-showcase:**
+
+1. Merge/cherry-pick agentic v2 to `main` (flag default off) — §11.2 options
+2. CI eval gate on `develop` with `AGENTIC_EVIDENCE_ENABLED=true`
+3. Optional: `AGENTIC_VERIFIER_LLM`, live planner eval subset
 
 ---
 
-*This document is the source of truth for v2 implementation on `develop`. Update section 6 checkboxes as phases complete.*
+## 16. Appendix C — Whole-project roadmap (reference)
+
+Full reviewer feedback, feature tiers, architectural notes, and post-showcase build order:
+
+**[`planning/post-v1-product-review.md`](./post-v1-product-review.md)**
+
+Cross-links:
+
+- Production phases P1–P5: [`docs/production-roadmap.md`](../docs/production-roadmap.md)
+- Product strategy: [`STRATEGY.md`](../STRATEGY.md)
+- Demo script: [`docs/demo-script.md`](../docs/demo-script.md)
+- **UI testing (tri-state):** [`docs/guides/ui-testing-tri-state.md`](../docs/guides/ui-testing-tri-state.md)
+
+---
+
+*This document is the source of truth for v2 **agentic evidence** implementation on `develop`. Whole-project direction lives in `post-v1-product-review.md`.*

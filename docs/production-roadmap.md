@@ -112,7 +112,10 @@ Capstone/showcase docs under `docs/capstone/` are **historical**; do not block p
 
 ## What to build next (recommended)
 
-**Now:** P5 complete — next focus showcase freeze prep (`docs/demo-script.md`, `pnpm eval:gate`, dry-runs).  
+**Now:** Showcase freeze — [`docs/demo-script.md`](./demo-script.md), `pnpm eval:gate`, dry-runs.
+
+**Post-showcase:** Whole-project tiers and build order → [`planning/post-v1-product-review.md`](../planning/post-v1-product-review.md).  
+Agentic v2 merge policy → [`planning/agentic-v2-implementation-plan.md`](../planning/agentic-v2-implementation-plan.md) §11–§15.
 
 P1–P5 shipped (SSO/RBAC, Langfuse export + SLO dashboard, DR runbook).
 

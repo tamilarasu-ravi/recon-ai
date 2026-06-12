@@ -6,6 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DecisionBadge } from "@/app/components/ui/decision-badge";
 import { IngestWorkflowTrace } from "@/app/components/ingest-workflow-trace";
 import { useTenant } from "@/app/components/tenant-provider";
+import {
+  DEMO_TENANT_ACME,
+  DEMO_TENANT_NORTHWIND,
+} from "@/lib/ui/demo-tenant-labels";
 import { apiFetch } from "@/lib/ui/api-fetch";
 import {
   buildExternalTransactionId,
@@ -216,7 +220,7 @@ export function TransactionIngestForm(): React.ReactElement {
    */
   async function submitIngest(): Promise<void> {
     if (!tenantId) {
-      setError("Select a tenant in the header before submitting.");
+      setError("Select a company in the header before submitting.");
       return;
     }
 
@@ -307,15 +311,48 @@ export function TransactionIngestForm(): React.ReactElement {
   return (
     <div className="ingest-form">
       {!tenantId && !tenantLoading ? (
-        <p className="alert alert--info">Pick a tenant in the header, then return here.</p>
+        <p className="alert alert--info">Pick a company in the header, then return here.</p>
       ) : null}
 
       {activeTenant ? (
         <p className="ingest-form__tenant" style={{ fontSize: "0.875rem", marginBottom: "1.25rem" }}>
-          Submitting for <strong>{activeTenant.name}</strong>{" "}
-          <span style={{ color: "var(--color-text-muted)" }}>({activeTenant.slug})</span>
+          Submitting for <strong>{activeTenant.name}</strong>
         </p>
       ) : null}
+
+      <section
+        className="panel panel--info"
+        style={{ marginBottom: "1.5rem", fontSize: "0.8125rem" }}
+        aria-label="Tri-state testing quick reference"
+      >
+        <h2 className="panel__title" style={{ fontSize: "0.9375rem" }}>
+          Test tri-state decisions (UI guide)
+        </h2>
+        <p className="panel__desc" style={{ marginBottom: "0.75rem" }}>
+          Choose <strong>Sync</strong>, submit, then open the transaction →{" "}
+          <strong>Run history → Pipeline steps</strong>. Full steps:{" "}
+          <code>docs/guides/ui-testing-tri-state.md</code>
+        </p>
+        <ul style={{ margin: 0, paddingLeft: "1.25rem", lineHeight: 1.6 }}>
+          <li>
+            <DecisionBadge decision="AUTO_TAG" /> · <strong>{DEMO_TENANT_ACME.name}</strong> ·{" "}
+            <code>slack</code> · 45.00 · memo <code>team plan</code>
+          </li>
+          <li>
+            <DecisionBadge decision="QUEUE_REVIEW" /> · <strong>{DEMO_TENANT_ACME.name}</strong> ·{" "}
+            <code>Zephyr Labs LLC</code> (custom) · 1200.00 · <code>consulting</code>
+          </li>
+          <li>
+            <DecisionBadge decision="REFUSE" /> · <strong>{DEMO_TENANT_NORTHWIND.name}</strong> ·{" "}
+            <code>Unknown Courier 42</code> (custom) · 60.00
+          </li>
+        </ul>
+        <p style={{ margin: "0.75rem 0 0", color: "var(--color-text-muted)" }}>
+          Agentic trace: <code>AGENTIC_EVIDENCE_ENABLED=true</code>. Live tokens/cost:{" "}
+          <code>LLM_ENABLE_LIVE_CALLS=true</code> + API key. Zephyr cold-start needs no prior
+          override on that vendor.
+        </p>
+      </section>
 
       <section className="panel" style={{ marginBottom: "1.5rem" }}>
         <h2 className="panel__title">Scenario preset</h2>
