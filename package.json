@@ -8,8 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "next dev",
     "build": "next build",
+    "dev": "next dev",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -37,7 +37,11 @@
     "test": "LANGGRAPH_CHECKPOINTER=memory AUTO_TAG_HITL_ENABLED=false node --import tsx --test tests/unit/**/*.test.ts tests/integration/**/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "playwright:install": "playwright install chromium"
+    "playwright:install": "playwright install chromium",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.4.3",
@@ -46,6 +50,7 @@
     "@langchain/langgraph": "^1.3.3",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.2",
     "@modelcontextprotocol/sdk": "^1.11.0",
+    "@opennextjs/cloudflare": "^1.19.11",
     "drizzle-orm": "^0.39.3",
     "langfuse": "^3.38.20",
     "mermaid": "^11.15.0",
@@ -64,6 +69,7 @@
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.30.4",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "wrangler": "^4.100.0"
   }
 }

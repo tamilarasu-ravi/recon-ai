@@ -56,3 +56,13 @@ docs/*
 
 # Local-only doc exports (PDF brief, etc.)
 docs/recon-ai-docs/
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+
+!.env.example
