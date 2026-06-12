@@ -17,6 +17,9 @@ interface PipelineTraceModalProps {
   onClose: () => void;
   tenantId: string | null;
   target: PipelineTraceModalTarget | null;
+  /** When true, shows a spinner until runId is ready (reprocess in flight). */
+  pending?: boolean;
+  pendingLabel?: string;
 }
 
 /**
@@ -30,34 +33,48 @@ export function PipelineTraceModal({
   onClose,
   tenantId,
   target,
+  pending = false,
+  pendingLabel = "Processing…",
 }: PipelineTraceModalProps): React.ReactElement | null {
   if (!target || !tenantId) {
     return null;
   }
 
-  const detailHref = `/transactions/${target.transactionId}?tenant_id=${encodeURIComponent(tenantId)}&run_id=${encodeURIComponent(target.runId)}`;
+  const traceReady = !pending && target.runId.length > 0;
+  const detailHref = traceReady
+    ? `/transactions/${target.transactionId}?tenant_id=${encodeURIComponent(tenantId)}&run_id=${encodeURIComponent(target.runId)}`
+    : null;
 
   return (
     <AppModal
       open={open}
       onClose={onClose}
-      title="Pipeline trace"
+      title={pending ? "Processing expense" : "Pipeline trace"}
       description={`${target.vendorRaw} · ${target.externalTransactionId}`}
       size="wide"
       headerActions={
-        <Link href={detailHref} className="btn btn--secondary" style={{ fontSize: "0.8125rem" }}>
-          Full transaction →
-        </Link>
+        detailHref ? (
+          <Link href={detailHref} className="btn btn--secondary" style={{ fontSize: "0.8125rem" }}>
+            Full transaction →
+          </Link>
+        ) : null
       }
     >
-      <PipelineWorkflowTrace
-        tenantId={tenantId}
-        transactionId={target.transactionId}
-        runId={target.runId}
-        enabled={open}
-        showDetailLink={false}
-        title="Workflow steps"
-      />
+      {traceReady ? (
+        <PipelineWorkflowTrace
+          tenantId={tenantId}
+          transactionId={target.transactionId}
+          runId={target.runId}
+          enabled={open}
+          showDetailLink={false}
+          title="Workflow steps"
+        />
+      ) : (
+        <div className="pipeline-trace-modal__pending" aria-live="polite">
+          <span className="loading-overlay__spinner" aria-hidden />
+          <p>{pendingLabel}</p>
+        </div>
+      )}
     </AppModal>
   );
 }

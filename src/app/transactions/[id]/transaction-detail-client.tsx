@@ -1,19 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageLayout } from "@/app/components/page-layout";
-import { PipelineWorkflowTrace } from "@/app/components/ingest-workflow-trace";
+import {
+  PipelineTraceModal,
+  type PipelineTraceModalTarget,
+} from "@/app/components/pipeline-trace-modal";
 import { RetrievalContextPanel } from "@/app/components/retrieval-context-panel";
-import { TransactionRunTrace } from "@/app/components/transaction-run-trace";
+import { TransactionRunHistory } from "@/app/components/transaction-run-history";
 import { DecisionBadge } from "@/app/components/ui/decision-badge";
 import { ReasonBadge } from "@/app/components/ui/reason-badge";
 import { useTenant } from "@/app/components/tenant-provider";
 import { apiFetch } from "@/lib/ui/api-fetch";
 import {
-  formatEventRunLabel,
   groupTransactionEventsByRun,
 } from "@/lib/ui/group-transaction-events";
 import { parseRetrievalFromObservability } from "@/lib/ui/parse-retrieval";
@@ -111,6 +112,10 @@ export function TransactionDetailClient(): React.ReactElement {
   const [approveMessage, setApproveMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [traceModalTarget, setTraceModalTarget] = useState<PipelineTraceModalTarget | null>(
+    null,
+  );
+  const [traceModalPending, setTraceModalPending] = useState(false);
 
   const loadDetail = useCallback(async (): Promise<void> => {
     if (!tenantId || !transactionId) return;
@@ -180,10 +185,33 @@ export function TransactionDetailClient(): React.ReactElement {
       params.set("tenant_id", tenantId);
     }
     router.replace(`/transactions/${transactionId}?${params.toString()}`, { scroll: false });
+  }
 
-    requestAnimationFrame(() => {
-      document.getElementById("run-trace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  /**
+   * Opens the pipeline trace modal for a run or pending reprocess.
+   *
+   * @param runId - LangGraph run_id; empty while reprocess is in flight.
+   * @param pending - When true, modal shows a spinner until runId is set.
+   */
+  function openPipelineTraceModal(runId: string, pending: boolean): void {
+    if (!detail) {
+      return;
+    }
+    setTraceModalTarget({
+      transactionId,
+      runId,
+      vendorRaw: detail.transaction.vendorRaw,
+      externalTransactionId: detail.transaction.externalTransactionId,
     });
+    setTraceModalPending(pending);
+  }
+
+  /**
+   * Closes the pipeline trace modal and clears pending state.
+   */
+  function closePipelineTraceModal(): void {
+    setTraceModalTarget(null);
+    setTraceModalPending(false);
   }
 
   async function submitAutoTagApproval(approved: boolean): Promise<void> {
@@ -249,8 +277,9 @@ export function TransactionDetailClient(): React.ReactElement {
   }
 
   async function submitReprocess(): Promise<void> {
-    if (!tenantId) return;
+    if (!tenantId || !detail) return;
     setReceiptMessage(null);
+    openPipelineTraceModal("", true);
     setActionLoading(true);
     try {
       const body = await runReprocess();
@@ -261,11 +290,19 @@ export function TransactionDetailClient(): React.ReactElement {
         }`,
       );
       if (body.run_id) {
+        setTraceModalTarget({
+          transactionId,
+          runId: body.run_id,
+          vendorRaw: detail.transaction.vendorRaw,
+          externalTransactionId: detail.transaction.externalTransactionId,
+        });
+        setTraceModalPending(false);
         selectRun(body.run_id);
       }
       invalidateReviewQueueCache(tenantId);
       await loadDetail();
     } catch (err) {
+      closePipelineTraceModal();
       setReceiptMessage(err instanceof Error ? err.message : "Reprocess failed");
     } finally {
       setActionLoading(false);
@@ -274,7 +311,7 @@ export function TransactionDetailClient(): React.ReactElement {
 
   async function submitReceipt(event: React.FormEvent): Promise<void> {
     event.preventDefault();
-    if (!tenantId) return;
+    if (!tenantId || !detail) return;
     setReceiptMessage(null);
     setActionLoading(true);
     try {
@@ -292,7 +329,9 @@ export function TransactionDetailClient(): React.ReactElement {
         throw new Error(body.error ?? `HTTP ${response.status}`);
       }
 
+      openPipelineTraceModal("", true);
       setReceiptMessage("Receipt cleared — reprocessing tagging…");
+
       const reprocessBody = await runReprocess();
       const reasonLabel = reprocessBody.reason ? ` (${reprocessBody.reason})` : "";
       setReceiptMessage(
@@ -303,11 +342,19 @@ export function TransactionDetailClient(): React.ReactElement {
         }`,
       );
       if (reprocessBody.run_id) {
+        setTraceModalTarget({
+          transactionId,
+          runId: reprocessBody.run_id,
+          vendorRaw: detail.transaction.vendorRaw,
+          externalTransactionId: detail.transaction.externalTransactionId,
+        });
+        setTraceModalPending(false);
         selectRun(reprocessBody.run_id);
       }
       invalidateReviewQueueCache(tenantId);
       await loadDetail();
     } catch (err) {
+      closePipelineTraceModal();
       setReceiptMessage(err instanceof Error ? err.message : "Receipt upload failed");
     } finally {
       setActionLoading(false);
@@ -375,10 +422,6 @@ export function TransactionDetailClient(): React.ReactElement {
     () => parseRetrievalFromObservability(selectedAudit?.observability),
     [selectedAudit?.observability],
   );
-  const selectedRunEvents =
-    eventRuns.find((group) => group.runId === selectedRunId)?.events ??
-    detail?.events.filter((event) => event.runId === selectedRunId) ??
-    [];
   const openReview = detail?.review_queue.find((r) => r.status === "open");
   const receiptCleared = Boolean(detail?.receipt?.clearedAt);
 
@@ -388,9 +431,9 @@ export function TransactionDetailClient(): React.ReactElement {
     <PageLayout
       backHref={backHref}
       backLabel="Review queue"
-      loading={loading || actionLoading}
-      blocking={loading || actionLoading}
-      blockingLabel={actionLoading ? "Saving…" : "Loading transaction…"}
+      loading={loading}
+      blocking={loading}
+      blockingLabel="Loading transaction…"
     >
       {error ? <p className="alert alert--error">{error}</p> : null}
 
@@ -479,89 +522,17 @@ export function TransactionDetailClient(): React.ReactElement {
             ) : null}
           </section>
 
-          {eventRuns.length > 0 ? (
-            <section className="panel detail-grid__full" style={{ marginBottom: "1rem" }}>
-              <h2 className="panel__title">Processing runs</h2>
-              <p className="panel__desc">
-                Each row is one pass through policy and tagging. Select a run to see step-by-step
-                detail below.
-              </p>
-              <ul className="event-run-list">
-                {eventRuns.map((run) => {
-                  const label = formatEventRunLabel(run.events.map((event) => event.eventType));
-                  const isActive = run.runId === selectedRunId;
-                  return (
-                    <li key={run.runId}>
-                      <button
-                        type="button"
-                        className={`event-run-btn${isActive ? " event-run-btn--active" : ""}`}
-                        onClick={() => selectRun(run.runId)}
-                        aria-current={isActive ? "true" : undefined}
-                      >
-                        <span className="event-run-btn__label">{label}</span>
-                        <span className="event-run-btn__meta">
-                          <code>{run.runId.slice(0, 8)}…</code>
-                          <time dateTime={run.createdAt}>
-                            {new Date(run.createdAt).toLocaleString()}
-                          </time>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
+          <TransactionRunHistory
+            eventRuns={eventRuns}
+            auditTrail={detail.audit_trail}
+            selectedRunId={selectedRunId}
+            onSelectRun={selectRun}
+            onViewPipelineSteps={(runId) => openPipelineTraceModal(runId, false)}
+          />
 
           <RetrievalContextPanel retrieval={selectedRetrieval} tenantId={tenantId} />
 
-          {selectedRunId && tenantId ? (
-            <section className="detail-grid__full" style={{ marginBottom: "1.25rem" }}>
-              <PipelineWorkflowTrace
-                tenantId={tenantId}
-                transactionId={transactionId}
-                runId={selectedRunId}
-                enabled
-                showDetailLink={false}
-                auditSectionId="run-trace"
-                title={
-                  detail.transaction.processingStatus === "processing"
-                    ? "Live processing steps"
-                    : "Processing steps"
-                }
-              />
-            </section>
-          ) : null}
-
           <div className="detail-grid">
-            <section id="run-trace" className="panel panel--muted detail-grid__full">
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                  marginBottom: "0.75rem",
-                }}
-              >
-                <h2 className="panel__title" style={{ margin: 0 }}>
-                  Step-by-step trace
-                </h2>
-                <Link
-                  href="/orchestrator"
-                  className="btn btn--secondary"
-                  style={{ padding: "0.35rem 0.65rem", fontSize: "0.8125rem" }}
-                >
-                  Workflow diagram
-                </Link>
-              </div>
-              {selectedRunId ? (
-                <TransactionRunTrace audit={selectedAudit ?? null} runEvents={selectedRunEvents} />
-              ) : (
-                <p className="loading-state">Select a run above to inspect the flow.</p>
-              )}
-            </section>
-
             <section className="panel panel--hitl">
               <h2 className="panel__title">Approve auto-coding</h2>
               {detail.pending_auto_tag ? (
@@ -689,6 +660,15 @@ export function TransactionDetailClient(): React.ReactElement {
             </section>
 
           </div>
+
+          <PipelineTraceModal
+            open={traceModalTarget !== null}
+            onClose={closePipelineTraceModal}
+            tenantId={tenantId}
+            target={traceModalTarget}
+            pending={traceModalPending}
+            pendingLabel="Running policy and tagging…"
+          />
         </>
       ) : null}
     </PageLayout>

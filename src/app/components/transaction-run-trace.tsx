@@ -18,6 +18,8 @@ export interface TransactionRunAudit {
 interface TransactionRunTraceProps {
   audit: TransactionRunAudit | null;
   runEvents: TransactionEventRow[];
+  /** When true, omits outer spacing for embedding inside run history cards. */
+  embedded?: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ interface TransactionRunTraceProps {
 export function TransactionRunTrace({
   audit,
   runEvents,
+  embedded = false,
 }: TransactionRunTraceProps): React.ReactElement {
   const observability = parseObservability(audit?.observability);
 
@@ -53,24 +56,21 @@ export function TransactionRunTrace({
 
   if (!audit) {
     return (
-      <div>
-        <p className="panel__desc">No audit trace stored for this run. Domain events:</p>
-        <ul className="api-list">
-          {runEvents.map((event, index) => (
-            <li key={`${event.eventType}-${index}`}>
-              <strong>{event.eventType}</strong>
-              <pre className="code-block code-block--light" style={{ marginTop: "0.5rem" }}>
-                {JSON.stringify(event.payload, null, 2)}
-              </pre>
-            </li>
-          ))}
-        </ul>
+      <div className={embedded ? "run-history-item__trace" : undefined}>
+        <p className="panel__desc">No audit trace stored for this run.</p>
+        {runEvents.length > 0 ? (
+          <DomainEventsList events={runEvents} />
+        ) : (
+          <p style={{ fontSize: "0.875rem", color: "var(--color-text-muted)" }}>
+            No domain events recorded.
+          </p>
+        )}
       </div>
     );
   }
 
   return (
-    <>
+    <div className={embedded ? "run-history-item__trace" : undefined}>
       <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", margin: "0 0 0.75rem" }}>
         {audit.policyVersion ? `Policy version ${audit.policyVersion}` : null}
         {audit.decision ? (
@@ -146,18 +146,9 @@ export function TransactionRunTrace({
       ) : null}
 
       {runEvents.length > 0 ? (
-        <details className="details-scroll" style={{ marginTop: "1rem" }}>
-          <summary className="details-summary">Activity ({runEvents.length})</summary>
-          <ul className="api-list" style={{ marginTop: "0.5rem" }}>
-            {runEvents.map((event, index) => (
-              <li key={`${event.eventType}-${index}`}>
-                <strong>{event.eventType}</strong>
-                <pre className="code-block code-block--light" style={{ marginTop: "0.35rem" }}>
-                  {JSON.stringify(event.payload, null, 2)}
-                </pre>
-              </li>
-            ))}
-          </ul>
+        <details className="details-scroll" style={{ marginTop: embedded ? "0.75rem" : "1rem" }} open={embedded}>
+          <summary className="details-summary">Domain events ({runEvents.length})</summary>
+          <DomainEventsList events={runEvents} />
         </details>
       ) : null}
 
@@ -167,6 +158,34 @@ export function TransactionRunTrace({
           <pre className="code-block">{JSON.stringify(observability.steps, null, 2)}</pre>
         </details>
       ) : null}
-    </>
+    </div>
+  );
+}
+
+/**
+ * Renders domain event payloads for one orchestrator run.
+ *
+ * @param props - Event rows for the selected run_id.
+ * @returns Ordered event list.
+ */
+function DomainEventsList({
+  events,
+}: {
+  events: TransactionEventRow[];
+}): React.ReactElement {
+  return (
+    <ul className="api-list" style={{ marginTop: "0.5rem" }}>
+      {events.map((event, index) => (
+        <li key={`${event.eventType}-${index}`}>
+          <strong>{event.eventType}</strong>
+          <span style={{ marginLeft: "0.5rem", fontSize: "0.8125rem", color: "var(--color-text-muted)" }}>
+            {new Date(event.createdAt).toLocaleString()}
+          </span>
+          <pre className="code-block code-block--light" style={{ marginTop: "0.35rem" }}>
+            {JSON.stringify(event.payload, null, 2)}
+          </pre>
+        </li>
+      ))}
+    </ul>
   );
 }

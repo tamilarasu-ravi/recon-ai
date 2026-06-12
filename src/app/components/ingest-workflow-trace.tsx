@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { DecisionBadge } from "@/app/components/ui/decision-badge";
 import type { PipelineTraceStepPayload } from "@/lib/pipeline/trace-step";
+import {
+  getPipelineTraceStatusLabel,
+  normalizePipelineTraceStepsForDisplay,
+  PHASE_HANDOFF_DETAIL_KEY,
+} from "@/lib/ui/normalize-pipeline-trace-steps";
 import { usePipelineTraceStream } from "@/lib/ui/use-pipeline-trace-stream";
 
 export interface PipelineWorkflowTraceProps {
@@ -46,6 +51,10 @@ export function PipelineWorkflowTrace({
 }: PipelineWorkflowTraceProps): React.ReactElement {
   const { steps, auditSummary, done, decision, confidence, error, connected } =
     usePipelineTraceStream(tenantId, transactionId, runId, enabled);
+  const displaySteps = useMemo(
+    () => normalizePipelineTraceStepsForDisplay(steps, done),
+    [steps, done],
+  );
   const listEndRef = useRef<HTMLLIElement | null>(null);
 
   useEffect(() => {
@@ -112,10 +121,10 @@ export function PipelineWorkflowTrace({
       ) : null}
 
       <ol className="workflow-trace__list">
-        {steps.map((step, index) => (
+        {displaySteps.map((step, index) => (
           <WorkflowTraceStepItem key={step.step_id} step={step} index={index} />
         ))}
-        {!done && connected && steps.length > 0 ? (
+        {!done && connected && displaySteps.length > 0 ? (
           <li
             ref={listEndRef}
             className="workflow-trace__item workflow-trace__item--pending"
@@ -287,6 +296,9 @@ function WorkflowTraceStepItem({ step, index }: WorkflowTraceStepItemProps): Rea
     ? (step.detail.neighbors as RagNeighborRow[])
     : [];
 
+  const isPhaseHandoff = step.detail?.[PHASE_HANDOFF_DETAIL_KEY] === true;
+  const statusLabel = getPipelineTraceStatusLabel(step);
+
   return (
     <li
       className={`workflow-trace__item ${statusClass}`}
@@ -300,8 +312,12 @@ function WorkflowTraceStepItem({ step, index }: WorkflowTraceStepItemProps): Rea
         {step.latency_ms !== undefined ? (
           <span className="workflow-trace__latency">{step.latency_ms}ms</span>
         ) : null}
-        <span className={`workflow-trace__status workflow-trace__status--${step.status}`}>
-          {step.status}
+        <span
+          className={`workflow-trace__status workflow-trace__status--${step.status}${
+            isPhaseHandoff ? " workflow-trace__status--handoff" : ""
+          }`}
+        >
+          {statusLabel}
         </span>
       </div>
 
