@@ -7,6 +7,7 @@ import {
   embedAndStoreTransaction,
   buildEmbeddingText,
 } from "@/lib/agents/tagging/embed-transaction";
+import { assertEmbeddingDimensionsMatchSchema } from "@/lib/agents/tagging/embedding-dimensions";
 import { lookupVendorRule } from "@/lib/agents/tagging/rule-lookup";
 import { resolveRetrievalPolicy } from "@/lib/agents/tagging/evidence-policy";
 import {
@@ -23,11 +24,12 @@ import {
 } from "@/lib/agents/tagging/evidence-verifier";
 import { buildRetrievalNeighborAuditRows } from "@/lib/agents/tagging/retrieval-audit";
 import { countLabeledTransactions, retrieveSimilarTransactions } from "@/lib/agents/tagging/retrieval";
+import { resolveFinalGateResult } from "@/lib/agents/tagging/resolve-final-gate";
 import { suggestTagging } from "@/lib/agents/tagging/suggest";
 import { normalizeVendor } from "@/lib/agents/tagging/vendor-normalize";
 import { hasMinHistory, scoreConfidence } from "@/lib/confidence/scorer";
 import type { DbClient } from "@/lib/db/client";
-import { chartOfAccounts, transactions } from "@/lib/db/schema";
+import { chartOfAccounts } from "@/lib/db/schema";
 import { applyTriStateGate, isGlInCoaAllowList, type TaggingDecision } from "@/lib/orchestrator/gates";
 import {
   emitPipelineTraceStep,
@@ -70,6 +72,8 @@ export interface TaggingAgentResult {
   suggestedGlAccountId: string | null;
   reason: string;
   vendorId: string | null;
+  taxCode: string | null;
+  dimensions: Record<string, unknown> | null;
   steps: StepSpan[];
   llmSkipped: boolean;
   llmSkippedReason?: string;
@@ -148,13 +152,6 @@ export async function runTaggingAgent(
     Date.now() - normalizeStarted,
     "Alias lookup maps raw vendor string to canonical vendor_id.",
   );
-
-  if (vendorResult.vendorId) {
-    await db
-      .update(transactions)
-      .set({ vendorId: vendorResult.vendorId, updatedAt: new Date() })
-      .where(eq(transactions.id, input.transactionId));
-  }
 
   const coaRows = await db
     .select({ id: chartOfAccounts.id, glCode: chartOfAccounts.glCode, glName: chartOfAccounts.glName })
@@ -325,127 +322,130 @@ export async function runTaggingAgent(
       "Vendor rule sufficient — embedding and similarity search skipped (agentic evidence).",
     );
   } else {
-  try {
-    const queryText = buildEmbeddingText(input.vendorRaw, input.memo, input.mcc);
+    try {
+      assertEmbeddingDimensionsMatchSchema(env.EMBEDDING_DIMENSIONS);
 
-    await traceEmit(
-      "embedding-start",
-      "embedding",
-      "Vector embedding",
-      "running",
-      {
-        chunk_text: queryText,
-        embedding_model: env.EMBEDDING_MODEL,
-        dimensions: env.EMBEDDING_DIMENSIONS,
-        storage: "transaction_embeddings (pgvector)",
-      },
-      undefined,
-      "Single document chunk: vendor | memo | mcc — embedded for similarity search.",
-    );
+      const queryText = buildEmbeddingText(input.vendorRaw, input.memo, input.mcc);
 
-    const queryEmbedding = env.LLM_ENABLE_LIVE_CALLS
-      ? await createLlmClient(env).embedText(queryText)
-      : buildDeterministicEmbedding(queryText, env.EMBEDDING_DIMENSIONS);
-
-    let storedInVectorDb = false;
-    if (env.LLM_ENABLE_LIVE_CALLS) {
-      await embedAndStoreTransaction(
-        db,
-        env,
-        input.tenantId,
-        input.transactionId,
-        input.vendorRaw,
-        input.memo,
-        input.mcc,
+      await traceEmit(
+        "embedding-start",
+        "embedding",
+        "Vector embedding",
+        "running",
+        {
+          chunk_text: queryText,
+          embedding_model: env.EMBEDDING_MODEL,
+          dimensions: env.EMBEDDING_DIMENSIONS,
+          storage: "transaction_embeddings (pgvector)",
+        },
+        undefined,
+        "Single document chunk: vendor | memo | mcc — embedded for similarity search.",
       );
-      storedInVectorDb = true;
-    }
 
-    await traceEmit(
-      "embedding-complete",
-      "embedding",
-      "Vector embedding",
-      "complete",
-      {
-        chunk_text: queryText,
-        embedding_model: env.EMBEDDING_MODEL,
-        dimensions: queryEmbedding.length,
-        stored_in_pgvector: storedInVectorDb,
-        live_api: env.LLM_ENABLE_LIVE_CALLS,
-      },
-      undefined,
-      storedInVectorDb
-        ? "Embedding upserted to transaction_embeddings for future retrieval."
-        : "Deterministic embedding used (LLM_ENABLE_LIVE_CALLS=false).",
-    );
+      const queryEmbedding = env.LLM_ENABLE_LIVE_CALLS
+        ? await createLlmClient(env).embedText(queryText)
+        : buildDeterministicEmbedding(queryText, env.EMBEDDING_DIMENSIONS);
 
-    await traceEmit(
-      "rag-retrieval-start",
-      "rag",
-      "RAG retrieval",
-      "running",
-      { top_k: 5, labeled_corpus_count: labeledCount },
-      undefined,
-      "Cosine similarity search over tenant-scoped labeled transactions.",
-    );
+      let storedInVectorDb = false;
+      if (env.LLM_ENABLE_LIVE_CALLS) {
+        await embedAndStoreTransaction(
+          db,
+          env,
+          input.tenantId,
+          input.transactionId,
+          input.vendorRaw,
+          input.memo,
+          input.mcc,
+        );
+        storedInVectorDb = true;
+      }
 
-    neighbors = await retrieveSimilarTransactions(db, input.tenantId, queryEmbedding, 5);
+      await traceEmit(
+        "embedding-complete",
+        "embedding",
+        "Vector embedding",
+        "complete",
+        {
+          chunk_text: queryText,
+          embedding_model: env.EMBEDDING_MODEL,
+          dimensions: queryEmbedding.length,
+          stored_in_pgvector: storedInVectorDb,
+          live_api: env.LLM_ENABLE_LIVE_CALLS,
+        },
+        undefined,
+        storedInVectorDb
+          ? "Embedding upserted to transaction_embeddings for future retrieval."
+          : "Deterministic embedding used (LLM_ENABLE_LIVE_CALLS=false).",
+      );
 
-    const proposedGlFromRetrievalPreview = neighbors[0]?.glAccountId;
-    const supportCountPreview = proposedGlFromRetrievalPreview
-      ? neighbors.filter((neighbor) => neighbor.glAccountId === proposedGlFromRetrievalPreview).length
-      : 0;
-    const agreeFracPreview =
-      neighbors.length > 0 && proposedGlFromRetrievalPreview
-        ? supportCountPreview / neighbors.length
+      await traceEmit(
+        "rag-retrieval-start",
+        "rag",
+        "RAG retrieval",
+        "running",
+        { top_k: 5, labeled_corpus_count: labeledCount },
+        undefined,
+        "Cosine similarity search over tenant-scoped labeled transactions.",
+      );
+
+      neighbors = await retrieveSimilarTransactions(db, input.tenantId, queryEmbedding, 5);
+
+      const proposedGlFromRetrievalPreview = neighbors[0]?.glAccountId;
+      const supportCountPreview = proposedGlFromRetrievalPreview
+        ? neighbors.filter((neighbor) => neighbor.glAccountId === proposedGlFromRetrievalPreview).length
         : 0;
-    const neighborAuditRows = await buildRetrievalNeighborAuditRows(db, neighbors, coaRows);
+      const agreeFracPreview =
+        neighbors.length > 0 && proposedGlFromRetrievalPreview
+          ? supportCountPreview / neighbors.length
+          : 0;
+      const neighborAuditRows = await buildRetrievalNeighborAuditRows(db, neighbors, coaRows);
 
-    steps.push({
-      name: "retrieval",
-      status: "ok",
-      latency_ms: Date.now() - retrievalStarted,
-      detail: {
-        neighbor_count: neighbors.length,
-        top1_sim: neighbors[0]?.similarity ?? 0,
-        support_count: supportCountPreview,
-        agree_frac: agreeFracPreview,
-        labeled_corpus_count: labeledCount,
-        neighbors: neighborAuditRows,
-      },
-    });
-    await traceEmit(
-      "rag-retrieval-complete",
-      "rag",
-      "RAG retrieval",
-      "complete",
-      {
-        neighbor_count: neighbors.length,
-        top1_similarity: neighbors[0]?.similarity ?? 0,
-        support_count: supportCountPreview,
-        agree_frac: agreeFracPreview,
-        labeled_corpus_count: labeledCount,
-        neighbors: neighborAuditRows,
-      },
-      Date.now() - retrievalStarted,
-      "Top-k neighbors inform confidence and LLM context.",
-    );
-  } catch {
-    steps.push({
-      name: "retrieval",
-      status: "error",
-      latency_ms: Date.now() - retrievalStarted,
-      detail: { neighbor_count: 0 },
-    });
-    await traceEmit(
-      "rag-retrieval-error",
-      "rag",
-      "RAG retrieval",
-      "error",
-      { neighbor_count: 0 },
-      Date.now() - retrievalStarted,
-    );
-  }
+      steps.push({
+        name: "retrieval",
+        status: "ok",
+        latency_ms: Date.now() - retrievalStarted,
+        detail: {
+          neighbor_count: neighbors.length,
+          top1_sim: neighbors[0]?.similarity ?? 0,
+          support_count: supportCountPreview,
+          agree_frac: agreeFracPreview,
+          labeled_corpus_count: labeledCount,
+          neighbors: neighborAuditRows,
+        },
+      });
+      await traceEmit(
+        "rag-retrieval-complete",
+        "rag",
+        "RAG retrieval",
+        "complete",
+        {
+          neighbor_count: neighbors.length,
+          top1_similarity: neighbors[0]?.similarity ?? 0,
+          support_count: supportCountPreview,
+          agree_frac: agreeFracPreview,
+          labeled_corpus_count: labeledCount,
+          neighbors: neighborAuditRows,
+        },
+        Date.now() - retrievalStarted,
+        "Top-k neighbors inform confidence and LLM context.",
+      );
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      steps.push({
+        name: "retrieval",
+        status: "error",
+        latency_ms: Date.now() - retrievalStarted,
+        detail: { neighbor_count: 0, error_message: errorMessage },
+      });
+      await traceEmit(
+        "rag-retrieval-error",
+        "rag",
+        "RAG retrieval",
+        "error",
+        { neighbor_count: 0, error_message: errorMessage },
+        Date.now() - retrievalStarted,
+      );
+    }
   }
 
   const proposedGlFromRule = ruleGlAccountId;
@@ -646,34 +646,26 @@ export async function runTaggingAgent(
     );
     gateResult = { decision: applied.decision, reason: applied.reason };
     finalConfidence = applied.confidence;
-  } else {
-    finalConfidence = confidenceResult.confidence;
   }
 
-  if (parseFailed && suggestResult.errorMessage?.includes("no longer available")) {
-    gateResult = { decision: "QUEUE_REVIEW", reason: "llm_unavailable" };
-  } else if (parseFailed && suggestResult.errorMessage?.startsWith("[GoogleGenerativeAI Error]")) {
-    gateResult = { decision: "QUEUE_REVIEW", reason: "llm_unavailable" };
-  }
+  const resolvedGate = resolveFinalGateResult({
+    gateResult,
+    finalConfidence,
+    parseFailed,
+    suggestErrorMessage: suggestResult.errorMessage,
+    vendorIsNew: vendorResult.isNewVendor,
+    neighborCount: neighbors.length,
+    ruleHit,
+  });
 
-  if (
-    vendorResult.isNewVendor &&
-    neighbors.length === 0 &&
-    !ruleHit &&
-    gateResult.decision !== "REFUSE"
-  ) {
-    gateResult = { decision: "QUEUE_REVIEW", reason: "new_vendor_cold_start" };
-  }
-
-  if (suggestResult.errorMessage === "llm_unavailable" && gateResult.decision === "AUTO_TAG") {
-    gateResult = { decision: "QUEUE_REVIEW", reason: "llm_unavailable" };
-  }
+  const taxCode = suggestResult.suggestion?.tax_code ?? ruleTaxCode ?? null;
+  const dimensions = suggestResult.suggestion?.dimensions ?? null;
 
   steps.push({
     name: "tri_state_decision",
     status: "ok",
     latency_ms: 0,
-    detail: { decision: gateResult.decision, reason: gateResult.reason },
+    detail: { decision: resolvedGate.decision, reason: resolvedGate.reason },
   });
   await traceEmit(
     "tri-state-decision",
@@ -681,32 +673,22 @@ export async function runTaggingAgent(
     "Tri-state decision",
     "complete",
     {
-      decision: gateResult.decision,
-      reason: gateResult.reason,
-      confidence: finalConfidence,
+      decision: resolvedGate.decision,
+      reason: resolvedGate.reason,
+      confidence: resolvedGate.confidence,
     },
     undefined,
     "AUTO_TAG, QUEUE_REVIEW, or REFUSE based on confidence, policy, and safety gates.",
   );
 
-  await db
-    .update(transactions)
-    .set({
-      suggestedGlAccountId: suggestedGl,
-      taggingDecision: gateResult.decision,
-      confidence: String(finalConfidence),
-      taxCode: suggestResult.suggestion?.tax_code ?? ruleTaxCode ?? undefined,
-      dimensions: suggestResult.suggestion?.dimensions,
-      updatedAt: new Date(),
-    })
-    .where(eq(transactions.id, input.transactionId));
-
   return {
-    decision: gateResult.decision,
-    confidence: finalConfidence,
+    decision: resolvedGate.decision,
+    confidence: resolvedGate.confidence,
     suggestedGlAccountId: suggestedGl,
-    reason: gateResult.reason,
+    reason: resolvedGate.reason,
     vendorId: vendorResult.vendorId,
+    taxCode,
+    dimensions,
     steps,
     llmSkipped: suggestResult.llmSkipped,
     llmSkippedReason: suggestResult.llmSkippedReason,

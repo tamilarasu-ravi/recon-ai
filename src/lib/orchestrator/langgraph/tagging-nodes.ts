@@ -12,6 +12,7 @@ import type { TaggingGraphStateType } from "@/lib/orchestrator/langgraph/tagging
 import { traceGraphStep } from "@/lib/orchestrator/langgraph/trace-step";
 import type { GraphStepRecord } from "@/lib/orchestrator/langgraph/trace-step";
 import { applyPolicyDecisionCap } from "@/lib/orchestrator/policy-cap";
+import { persistTaggingAgentResult } from "@/lib/orchestrator/persist-tagging-agent-result";
 import { syncAutoTagToErp } from "@/lib/integrations/erp/sync-auto-tag";
 import { buildTaggingObservability } from "@/lib/observability/llm-cost";
 import { syncReviewQueueAfterTagging } from "@/lib/orchestrator/review-queue-sync";
@@ -231,6 +232,8 @@ export async function runTaggingNode(
     },
   });
 
+  await persistTaggingAgentResult(db, state.transactionId, taggingResult);
+
   return { taggingResult, ...traceGraphStep("runTagging", started) };
 }
 
@@ -399,9 +402,12 @@ export async function persistIngestOutcomeNode(
     .update(transactions)
     .set({
       processingStatus: "completed",
+      vendorId: state.taggingResult.vendorId ?? undefined,
       taggingDecision: state.finalDecision,
       confidence: String(state.taggingResult.confidence),
       suggestedGlAccountId: state.taggingResult.suggestedGlAccountId,
+      taxCode: state.taggingResult.taxCode ?? undefined,
+      dimensions: state.taggingResult.dimensions,
       glAccountId: glAccountId ?? undefined,
       updatedAt: new Date(),
     })
@@ -525,9 +531,12 @@ export async function persistReprocessOutcomeNode(
   await db
     .update(transactions)
     .set({
+      vendorId: state.taggingResult.vendorId ?? undefined,
       taggingDecision: state.finalDecision,
       confidence: String(state.taggingResult.confidence),
       suggestedGlAccountId: state.taggingResult.suggestedGlAccountId,
+      taxCode: state.taggingResult.taxCode ?? undefined,
+      dimensions: state.taggingResult.dimensions,
       glAccountId: glAccountId ?? undefined,
       processingStatus: "completed",
       updatedAt: new Date(),

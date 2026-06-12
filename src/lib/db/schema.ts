@@ -14,10 +14,15 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-/** pgvector column — dimension from EMBEDDING_DIMENSIONS (768 Google, 1536 OpenAI). */
+/**
+ * pgvector column width — must match EMBEDDING_DIMENSIONS at runtime (see embedding-dimensions.ts).
+ * Changing this requires a migration to alter transaction_embeddings.embedding.
+ */
+export const PGVECTOR_EMBEDDING_DIMENSIONS = 768;
+
 const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
-    return "vector(768)";
+    return `vector(${PGVECTOR_EMBEDDING_DIMENSIONS})`;
   },
   toDriver(value: number[]): string {
     return `[${value.join(",")}]`;
@@ -50,6 +55,8 @@ export const policyOutcomeEnum = pgEnum("policy_outcome", [
   "FLAG_RECEIPT",
   "FLAG_REVIEW",
 ]);
+
+export const reviewQueueStatusEnum = pgEnum("review_queue_status", ["open", "resolved"]);
 
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -235,7 +242,7 @@ export const auditLog = pgTable(
     transactionId: uuid("transaction_id").references(() => transactions.id, {
       onDelete: "set null",
     }),
-    invoiceId: uuid("invoice_id"),
+    invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
     decision: taggingDecisionEnum("decision"),
     confidence: numeric("confidence", { precision: 5, scale: 4 }),
     policyVersion: text("policy_version"),
@@ -259,13 +266,14 @@ export const reviewQueue = pgTable(
       .notNull()
       .references(() => transactions.id, { onDelete: "cascade" }),
     reason: text("reason").notNull(),
-    status: text("status").notNull().default("open"),
+    status: reviewQueueStatusEnum("status").notNull().default("open"),
     runId: uuid("run_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("review_queue_tenant_id_idx").on(table.tenantId),
     index("review_queue_status_idx").on(table.status),
+    index("review_queue_transaction_id_idx").on(table.transactionId),
   ],
 );
 
